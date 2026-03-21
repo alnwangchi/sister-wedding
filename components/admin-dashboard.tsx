@@ -6,6 +6,12 @@ import { Carrot, CircleCheck, CircleX, Plus, Trash2 } from 'lucide-react';
 import type { RsvpRecord } from '@/types/rsvp';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  RsvpFiltersPanel,
+  type BinaryFilter,
+  type RelationshipTagFilter,
+  type SideFilter,
+} from '@/components/rsvp-filters-panel';
 import { SeatingPlannerTab } from '@/components/seating-planner-tab';
 import {
   Dialog,
@@ -41,12 +47,12 @@ export function AdminDashboard({
 }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]['id']>('responses');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedSides, setSelectedSides] = useState<Array<'groom' | 'bride'>>([]);
-  const [selectedRelationshipTags, setSelectedRelationshipTags] = useState<
-    Array<'classmate' | 'colleague' | 'friend'>
-  >([]);
-  const [selectedVegetarianStatus, setSelectedVegetarianStatus] = useState<Array<'yes' | 'no'>>([]);
-  const [selectedAttendingStatus, setSelectedAttendingStatus] = useState<Array<'yes' | 'no'>>([]);
+  const [selectedSides, setSelectedSides] = useState<SideFilter[]>([]);
+  const [selectedRelationshipTags, setSelectedRelationshipTags] = useState<RelationshipTagFilter[]>(
+    [],
+  );
+  const [selectedVegetarianStatus, setSelectedVegetarianStatus] = useState<BinaryFilter[]>([]);
+  const [selectedAttendingStatus, setSelectedAttendingStatus] = useState<BinaryFilter[]>([]);
   const [localRecords, setLocalRecords] = useState(records);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDeleteRecord, setPendingDeleteRecord] = useState<RsvpRecord | null>(null);
@@ -71,7 +77,7 @@ export function AdminDashboard({
     return { attendingCount, totalGuests };
   }, [localRecords]);
 
-  const filteredRecords = useMemo(() => {
+  const filteredRecordsForResponses = useMemo(() => {
     return localRecords.filter((record) => {
       const sideMatched = selectedSides.length === 0 || selectedSides.includes(record.side);
       const vegetarianStatus =
@@ -95,6 +101,22 @@ export function AdminDashboard({
     selectedSides,
     selectedVegetarianStatus,
   ]);
+
+  const filteredRecordsForSeating = useMemo(() => {
+    return localRecords.filter((record) => {
+      const sideMatched = selectedSides.length === 0 || selectedSides.includes(record.side);
+      const vegetarianStatus =
+        record.vegetarian === null ? null : record.vegetarian === 'none' ? 'no' : 'yes';
+      const vegetarianMatched =
+        selectedVegetarianStatus.length === 0 ||
+        (vegetarianStatus !== null && selectedVegetarianStatus.includes(vegetarianStatus));
+      const relationshipTagMatched =
+        selectedRelationshipTags.length === 0 ||
+        selectedRelationshipTags.includes(record.relationshipTag);
+
+      return sideMatched && vegetarianMatched && relationshipTagMatched;
+    });
+  }, [localRecords, selectedRelationshipTags, selectedSides, selectedVegetarianStatus]);
 
   function handleDeleteClick(record: RsvpRecord) {
     if (usingMockData) {
@@ -201,22 +223,30 @@ export function AdminDashboard({
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredRecordsForResponses.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const currentRecords = useMemo(() => {
     const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
-    return filteredRecords.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [filteredRecords, safeCurrentPage]);
+    return filteredRecordsForResponses.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredRecordsForResponses, safeCurrentPage]);
   const pageSummary = useMemo(() => {
-    if (filteredRecords.length === 0) {
+    if (filteredRecordsForResponses.length === 0) {
       return '0-0 / 0';
     }
 
     const start = (safeCurrentPage - 1) * PAGE_SIZE + 1;
-    const end = Math.min(safeCurrentPage * PAGE_SIZE, filteredRecords.length);
+    const end = Math.min(safeCurrentPage * PAGE_SIZE, filteredRecordsForResponses.length);
 
-    return `${start}-${end} / ${filteredRecords.length}`;
-  }, [filteredRecords.length, safeCurrentPage]);
+    return `${start}-${end} / ${filteredRecordsForResponses.length}`;
+  }, [filteredRecordsForResponses.length, safeCurrentPage]);
+
+  const clearFilters = () => {
+    setCurrentPage(1);
+    setSelectedSides([]);
+    setSelectedRelationshipTags([]);
+    setSelectedVegetarianStatus([]);
+    setSelectedAttendingStatus([]);
+  };
 
   return (
     <div className='space-y-6'>
@@ -232,20 +262,38 @@ export function AdminDashboard({
         </div>
       ) : null}
 
-      <div className='flex gap-3'>
-        {tabs.map((tab) => (
+      <div className='flex items-center justify-between gap-3'>
+        <div className='flex gap-3'>
+          {tabs.map((tab) => (
+            <Button
+              key={tab.id}
+              type='button'
+              onClick={() => setActiveTab(tab.id)}
+              variant={activeTab === tab.id ? 'default' : 'outline'}
+              className={`h-auto rounded-full px-5 py-2 ${
+                activeTab === tab.id ? '' : 'border-rose-100 text-stone-600'
+              }`}
+            >
+              {tab.label}
+            </Button>
+          ))}
+        </div>
+
+        {activeTab === 'responses' ? (
           <Button
-            key={tab.id}
             type='button'
-            onClick={() => setActiveTab(tab.id)}
-            variant={activeTab === tab.id ? 'default' : 'outline'}
-            className={`h-auto rounded-full px-5 py-2 ${
-              activeTab === tab.id ? '' : 'border-rose-100 text-stone-600'
-            }`}
+            size='icon'
+            onClick={() => {
+              setCreateError('');
+              setCreateDialogOpen(true);
+            }}
+            className='h-8 w-8 rounded-full'
+            title='新增賓客'
           >
-            {tab.label}
+            <Plus aria-hidden='true' className='size-4' />
+            <span className='sr-only'>新增賓客</span>
           </Button>
-        ))}
+        ) : null}
       </div>
 
       {activeTab === 'responses' ? (
@@ -256,103 +304,37 @@ export function AdminDashboard({
             </div>
           ) : (
             <div className='space-y-4'>
-              <div className='space-y-3 rounded-3xl border border-rose-100 bg-rose-50/40 p-4 text-sm'>
-                <div className='flex items-center justify-between gap-2'>
-                  <p className='font-semibold text-stone-700'>篩選條件</p>
-                  <Button
-                    type='button'
-                    onClick={() => {
-                      setCurrentPage(1);
-                      setSelectedSides([]);
-                      setSelectedRelationshipTags([]);
-                      setSelectedVegetarianStatus([]);
-                      setSelectedAttendingStatus([]);
-                    }}
-                    variant='outline'
-                    size='sm'
-                    className='ml-auto h-auto rounded-full px-2.5 py-1 text-[11px]'
-                  >
-                    清除篩選
-                  </Button>
-                </div>
-                <div className='flex flex-wrap items-center gap-x-14 gap-y-2'>
-                  <FilterGroup
-                    label='男方 / 女方'
-                    options={[
-                      { value: 'groom', label: '男方' },
-                      { value: 'bride', label: '女方' },
-                    ]}
-                    selectedValues={selectedSides}
-                    onToggle={(value) => {
-                      setCurrentPage(1);
-                      toggleMultiSelect(value, setSelectedSides);
-                    }}
-                  />
+              <RsvpFiltersPanel
+                selectedSides={selectedSides}
+                selectedRelationshipTags={selectedRelationshipTags}
+                selectedVegetarianStatus={selectedVegetarianStatus}
+                selectedAttendingStatus={selectedAttendingStatus}
+                onToggleSide={(value) => {
+                  setCurrentPage(1);
+                  toggleMultiSelect(value, setSelectedSides);
+                }}
+                onToggleRelationshipTag={(value) => {
+                  setCurrentPage(1);
+                  toggleMultiSelect(value, setSelectedRelationshipTags);
+                }}
+                onToggleVegetarianStatus={(value) => {
+                  setCurrentPage(1);
+                  toggleMultiSelect(value, setSelectedVegetarianStatus);
+                }}
+                onToggleAttendingStatus={(value) => {
+                  setCurrentPage(1);
+                  toggleMultiSelect(value, setSelectedAttendingStatus);
+                }}
+                onClearFilters={clearFilters}
+              />
 
-                  <FilterGroup
-                    label='吃素'
-                    options={[
-                      { value: 'yes', label: '素食' },
-                      { value: 'no', label: '不素' },
-                    ]}
-                    selectedValues={selectedVegetarianStatus}
-                    onToggle={(value) => {
-                      setCurrentPage(1);
-                      toggleMultiSelect(value, setSelectedVegetarianStatus);
-                    }}
-                  />
-
-                  <FilterGroup
-                    label='是否參加'
-                    options={[
-                      { value: 'yes', label: '參加' },
-                      { value: 'no', label: '不參加' },
-                    ]}
-                    selectedValues={selectedAttendingStatus}
-                    onToggle={(value) => {
-                      setCurrentPage(1);
-                      toggleMultiSelect(value, setSelectedAttendingStatus);
-                    }}
-                  />
-
-                  <FilterGroup
-                    label='關係標籤'
-                    options={[
-                      { value: 'classmate', label: '同學' },
-                      { value: 'colleague', label: '同事' },
-                      { value: 'friend', label: '朋友' },
-                    ]}
-                    selectedValues={selectedRelationshipTags}
-                    onToggle={(value) => {
-                      setCurrentPage(1);
-                      toggleMultiSelect(value, setSelectedRelationshipTags);
-                    }}
-                  />
-                </div>
-              </div>
-
-              {filteredRecords.length === 0 ? (
+              {filteredRecordsForResponses.length === 0 ? (
                 <div className='rounded-3xl bg-amber-50 px-5 py-8 text-center text-sm text-amber-700'>
                   目前篩選條件下沒有資料，請調整篩選條件後再試。
                 </div>
               ) : null}
 
               <div className='rounded-3xl border border-rose-100'>
-                <div className='flex items-center justify-end border-b border-rose-100 px-4 py-3'>
-                  <Button
-                    type='button'
-                    size='icon'
-                    onClick={() => {
-                      setCreateError('');
-                      setCreateDialogOpen(true);
-                    }}
-                    className='h-8 w-8 rounded-full'
-                    title='新增賓客'
-                  >
-                    <Plus aria-hidden='true' className='size-4' />
-                    <span className='sr-only'>新增賓客</span>
-                  </Button>
-                </div>
                 <Table>
                   <TableCaption>每頁顯示 20 筆，可搭配上方篩選條件快速檢視資料。</TableCaption>
                   <TableHeader>
@@ -477,7 +459,35 @@ export function AdminDashboard({
           )}
         </section>
       ) : (
-        <SeatingPlannerTab records={localRecords} />
+        <SeatingPlannerTab
+          records={filteredRecordsForSeating}
+          filtersPanel={
+            <RsvpFiltersPanel
+              selectedSides={selectedSides}
+              selectedRelationshipTags={selectedRelationshipTags}
+              selectedVegetarianStatus={selectedVegetarianStatus}
+              selectedAttendingStatus={selectedAttendingStatus}
+              onToggleSide={(value) => {
+                setCurrentPage(1);
+                toggleMultiSelect(value, setSelectedSides);
+              }}
+              onToggleRelationshipTag={(value) => {
+                setCurrentPage(1);
+                toggleMultiSelect(value, setSelectedRelationshipTags);
+              }}
+              onToggleVegetarianStatus={(value) => {
+                setCurrentPage(1);
+                toggleMultiSelect(value, setSelectedVegetarianStatus);
+              }}
+              onToggleAttendingStatus={(value) => {
+                setCurrentPage(1);
+                toggleMultiSelect(value, setSelectedAttendingStatus);
+              }}
+              onClearFilters={clearFilters}
+              visibleGroups={{ attending: false }}
+            />
+          }
+        />
       )}
 
       <Dialog
@@ -682,37 +692,5 @@ const relationshipTagBadgeClass = {
 function toggleMultiSelect<T>(value: T, setter: React.Dispatch<React.SetStateAction<T[]>>) {
   setter((prev) =>
     prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value],
-  );
-}
-
-function FilterGroup<T extends string>({
-  label,
-  options,
-  selectedValues,
-  onToggle,
-}: {
-  label: string;
-  options: Array<{ value: T; label: string }>;
-  selectedValues: T[];
-  onToggle: (value: T) => void;
-}) {
-  return (
-    <div className='flex flex-wrap items-center gap-x-2 gap-y-1.5'>
-      <p className='min-w-fit text-xs text-stone-600'>{label}</p>
-      {options.map((option) => (
-        <label
-          key={option.value}
-          className='flex cursor-pointer items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs text-stone-700 transition hover:border-rose-300'
-        >
-          <input
-            type='checkbox'
-            checked={selectedValues.includes(option.value)}
-            onChange={() => onToggle(option.value)}
-            className='h-3 w-3 appearance-none rounded-full border border-rose-300 bg-white focus:ring-sky-400 checked:border-sky-500 checked:bg-[radial-gradient(circle,_#0ea5e9_38%,_transparent_40%)]'
-          />
-          <span>{option.label}</span>
-        </label>
-      ))}
-    </div>
   );
 }

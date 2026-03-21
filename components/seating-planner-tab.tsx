@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
 
 import type { RsvpRecord } from '@/types/rsvp';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,10 @@ const DRAG_MIME_TYPE = 'application/x-rsvp-guest-id';
 
 type SeatingPlannerTabProps = {
   records: RsvpRecord[];
+  filtersPanel?: ReactNode;
 };
 
-export function SeatingPlannerTab({ records }: SeatingPlannerTabProps) {
+export function SeatingPlannerTab({ records, filtersPanel }: SeatingPlannerTabProps) {
   const attendingGuests = useMemo(
     () =>
       records
@@ -112,6 +113,8 @@ export function SeatingPlannerTab({ records }: SeatingPlannerTabProps) {
       </div>
 
       <div className='mt-4 rounded-3xl border border-rose-100 bg-rose-50/40 p-4'>
+        {filtersPanel ? <div className='mb-4'>{filtersPanel}</div> : null}
+
         <div className='flex items-center justify-between gap-2'>
           <p className='text-xs font-medium text-stone-600'>會出席賓客清單（可拖拉）</p>
           <p className='text-xs text-stone-500'>
