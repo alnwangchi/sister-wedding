@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fffaf7;
+  --foreground: #44403c;
+  --card: rgba(255, 255, 255, 0.78);
+  --rose-soft: #fff1f2;
+  --rose-main: #f43f5e;
+  --gold-soft: #f8ede3;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(255, 228, 230, 0.9), transparent 36%),
+    linear-gradient(180deg, #fffdfc 0%, #fff7f2 100%);
+  color: var(--foreground);
+}
+
+body::selection {
+  background: rgba(244, 63, 94, 0.18);
+}
