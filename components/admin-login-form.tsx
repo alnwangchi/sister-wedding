@@ -53,9 +53,6 @@ export function AdminLoginForm() {
         <p className='mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600'>{error}</p>
       ) : null}
 
-      <Button asChild variant='outline' className='h-auto rounded-full px-6 py-3'>
-        <Link href='/admin'>新人後台</Link>
-      </Button>
       <Button
         type='submit'
         variant='secondary'

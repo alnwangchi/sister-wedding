@@ -1,6 +1,8 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
   getDocs,
   orderBy,
   query,
@@ -49,4 +51,9 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
       createdAt,
     };
   });
+}
+
+export async function deleteRsvp(id: string) {
+  const db = getFirebaseDb();
+  await deleteDoc(doc(db, COLLECTION_NAME, id));
 }
