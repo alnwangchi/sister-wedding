@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Carrot, CircleCheck, CircleX, Plus, Trash2 } from 'lucide-react';
 
 import type { RsvpRecord } from '@/types/rsvp';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { SeatingPlannerTab } from '@/components/seating-planner-tab';
 import {
   Dialog,
@@ -347,7 +349,7 @@ export function AdminDashboard({
                     className='h-8 w-8 rounded-full'
                     title='新增賓客'
                   >
-                    <span className='text-lg leading-none'>＋</span>
+                    <Plus aria-hidden='true' className='size-4' />
                     <span className='sr-only'>新增賓客</span>
                   </Button>
                 </div>
@@ -373,14 +375,44 @@ export function AdminDashboard({
                       <TableRow key={record.id} className='border-rose-100'>
                         <TableCell className='font-medium text-stone-700'>{record.name}</TableCell>
                         <TableCell>{record.phone}</TableCell>
-                        <TableCell>{record.attending ? '會參加' : '無法參加'}</TableCell>
+                        <TableCell>
+                          <span
+                            className='inline-flex items-center justify-center'
+                            title={record.attending ? '會參加' : '無法參加'}
+                          >
+                            {record.attending ? (
+                              <CircleCheck aria-hidden='true' className='size-4 text-emerald-600' />
+                            ) : (
+                              <CircleX aria-hidden='true' className='size-4 text-stone-400' />
+                            )}
+                            <span className='sr-only'>
+                              {record.attending ? '會參加' : '無法參加'}
+                            </span>
+                          </span>
+                        </TableCell>
                         <TableCell>{record.guestCount}</TableCell>
                         <TableCell>{record.email}</TableCell>
                         <TableCell>
-                          {record.vegetarian === null ? '—' : vegetarianLabel[record.vegetarian]}
+                          {record.vegetarian === null ? (
+                            '—'
+                          ) : record.vegetarian === 'none' ? (
+                            vegetarianLabel[record.vegetarian]
+                          ) : (
+                            <span
+                              className='inline-flex items-center justify-center'
+                              title={vegetarianLabel[record.vegetarian]}
+                            >
+                              <Carrot aria-hidden='true' className='size-4 text-emerald-600' />
+                              <span className='sr-only'>{vegetarianLabel[record.vegetarian]}</span>
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>{record.side === 'groom' ? '男方' : '女方'}</TableCell>
-                        <TableCell>{relationshipTagLabel[record.relationshipTag]}</TableCell>
+                        <TableCell>
+                          <Badge className={relationshipTagBadgeClass[record.relationshipTag]}>
+                            {relationshipTagLabel[record.relationshipTag]}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           {record.attending
                             ? record.seatAssigned
@@ -399,23 +431,7 @@ export function AdminDashboard({
                             className='cursor-pointer text-rose-500 hover:text-rose-600'
                             title={usingMockData ? '展示資料不可刪除' : '刪除資料'}
                           >
-                            <svg
-                              xmlns='http://www.w3.org/2000/svg'
-                              viewBox='0 0 24 24'
-                              fill='none'
-                              stroke='currentColor'
-                              strokeWidth='2'
-                              strokeLinecap='round'
-                              strokeLinejoin='round'
-                              aria-hidden='true'
-                              className='size-4'
-                            >
-                              <path d='M3 6h18' />
-                              <path d='M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2' />
-                              <path d='M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6' />
-                              <path d='M10 11v6' />
-                              <path d='M14 11v6' />
-                            </svg>
+                            <Trash2 aria-hidden='true' className='size-4' />
                             <span className='sr-only'>刪除 {record.name}</span>
                           </Button>
                         </TableCell>
@@ -657,6 +673,12 @@ const relationshipTagLabel = {
   friend: '朋友',
 } as const;
 
+const relationshipTagBadgeClass = {
+  classmate: 'border-violet-200 bg-violet-50 text-violet-700',
+  colleague: 'border-cyan-200 bg-cyan-50 text-cyan-700',
+  friend: 'border-rose-200 bg-rose-50 text-rose-700',
+} as const;
+
 function toggleMultiSelect<T>(value: T, setter: React.Dispatch<React.SetStateAction<T[]>>) {
   setter((prev) =>
     prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value],
@@ -680,17 +702,13 @@ function FilterGroup<T extends string>({
       {options.map((option) => (
         <label
           key={option.value}
-          className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-1.5 text-xs transition ${
-            selectedValues.includes(option.value)
-              ? 'border-rose-400 bg-rose-50 text-rose-700'
-              : 'border-rose-200 bg-white text-stone-700 hover:border-rose-300'
-          }`}
+          className='flex cursor-pointer items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs text-stone-700 transition hover:border-rose-300'
         >
           <input
             type='checkbox'
             checked={selectedValues.includes(option.value)}
             onChange={() => onToggle(option.value)}
-            className='h-3 w-3 rounded border-rose-300 text-rose-500 focus:ring-rose-400'
+            className='h-3 w-3 appearance-none rounded-full border border-rose-300 bg-white focus:ring-sky-400 checked:border-sky-500 checked:bg-[radial-gradient(circle,_#0ea5e9_38%,_transparent_40%)]'
           />
           <span>{option.label}</span>
         </label>

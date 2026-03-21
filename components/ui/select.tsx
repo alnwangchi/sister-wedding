@@ -2,32 +2,9 @@
 
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-
-function ChevronDownIcon(props: React.ComponentProps<"svg">) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" {...props}>
-      <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ChevronUpIcon(props: React.ComponentProps<"svg">) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" {...props}>
-      <path d="M5 12.5L10 7.5L15 12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CheckIcon(props: React.ComponentProps<"svg">) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" {...props}>
-      <path d="M4.75 10L8.5 13.75L15.25 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 function Select({
   ...props
@@ -57,7 +34,7 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="size-4 text-stone-400" />
+        <ChevronDown aria-hidden="true" className="size-4 text-stone-400" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -83,13 +60,13 @@ function SelectContent({
         {...props}
       >
         <SelectPrimitive.ScrollUpButton className="flex h-7 items-center justify-center bg-white text-stone-500">
-          <ChevronUpIcon className="size-4" />
+          <ChevronUp aria-hidden="true" className="size-4" />
         </SelectPrimitive.ScrollUpButton>
         <SelectPrimitive.Viewport className="p-1">
           {children}
         </SelectPrimitive.Viewport>
         <SelectPrimitive.ScrollDownButton className="flex h-7 items-center justify-center bg-white text-stone-500">
-          <ChevronDownIcon className="size-4" />
+          <ChevronDown aria-hidden="true" className="size-4" />
         </SelectPrimitive.ScrollDownButton>
       </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
@@ -112,7 +89,7 @@ function SelectItem({
     >
       <span className="absolute left-3 flex size-4 items-center justify-center text-rose-500">
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" />
+          <Check aria-hidden="true" className="size-4" />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
