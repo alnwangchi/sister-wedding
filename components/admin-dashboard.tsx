@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { RsvpRecord } from '@/types/rsvp';
 import { Button } from '@/components/ui/button';
+import { SeatingPlannerTab } from '@/components/seating-planner-tab';
 import {
   Dialog,
   DialogContent,
@@ -372,16 +373,7 @@ export function AdminDashboard({
           )}
         </section>
       ) : (
-        <section className='rounded-[2rem] border border-dashed border-rose-200 bg-white/80 p-10 shadow-sm'>
-          <p className='text-sm font-semibold text-rose-500'>Tab 2 預留區</p>
-          <h2 className='mt-2 text-xl font-semibold text-stone-800'>婚宴座位安排功能</h2>
-          <p className='mt-3 max-w-2xl text-sm leading-7 text-stone-500'>
-            這個區塊先保留給後續的座位安排規格。之後可以在這裡加入桌次、分桌名單、拖曳分配或列印格式等功能。
-          </p>
-          <div className='mt-6 rounded-3xl bg-rose-50 px-5 py-4 text-sm text-stone-500'>
-            目前先維持空白預留，不影響 Tab 1 的資料管理。
-          </div>
-        </section>
+        <SeatingPlannerTab records={localRecords} />
       )}
 
       <div className='text-right text-sm text-stone-400'>需要電子喜帖：{stats.needEDMCount} 筆</div>
