@@ -48,6 +48,8 @@ export async function POST(request: Request) {
       relationshipTag: parsed.data.relationshipTag,
       message: "",
       seatAssigned: false,
+      seatOrder: null,
+      seatPosition: null,
     });
 
     return NextResponse.json({
@@ -64,6 +66,8 @@ export async function POST(request: Request) {
         relationshipTag: parsed.data.relationshipTag,
         message: "",
         seatAssigned: false,
+        seatOrder: null,
+        seatPosition: null,
         createdAt: new Date().toISOString(),
       },
     });

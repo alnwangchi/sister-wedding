@@ -1,0 +1,12 @@
+---
+description: Use lucide-react for all project icons
+alwaysApply: true
+---
+
+# Lucide Icon Standard
+
+- Use `lucide-react` for all icons in this project.
+- Do not add new inline `<svg>` icons in components unless there is no Lucide equivalent.
+- Do not introduce other icon libraries (for example `react-icons`, `@heroicons/react`, or custom icon packs).
+- Prefer importing only the icons you need, for example `import { Trash2 } from "lucide-react"`.
+- Keep decorative icons `aria-hidden="true"` and pair action icons with readable labels (`sr-only` text) when needed.

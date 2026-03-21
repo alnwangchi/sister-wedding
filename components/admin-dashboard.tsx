@@ -37,6 +37,11 @@ const tabs = [
 ] as const;
 
 const PAGE_SIZE = 20;
+type SeatingAssignmentPayload = {
+  id: string;
+  seatOrder: number;
+  seatPosition: string;
+};
 
 export function AdminDashboard({
   records,
@@ -118,6 +123,11 @@ export function AdminDashboard({
     });
   }, [localRecords, selectedRelationshipTags, selectedSides, selectedVegetarianStatus]);
 
+  const filteredGuestIdsForSeating = useMemo(
+    () => filteredRecordsForSeating.map((record) => record.id),
+    [filteredRecordsForSeating],
+  );
+
   function handleDeleteClick(record: RsvpRecord) {
     if (usingMockData) {
       window.alert('目前為展示資料，暫不提供刪除功能。');
@@ -176,6 +186,8 @@ export function AdminDashboard({
           relationshipTag: newGuestRelationshipTag,
           message: '',
           seatAssigned: false,
+          seatOrder: null,
+          seatPosition: null,
           createdAt: new Date().toISOString(),
         };
         setLocalRecords((prev) => [createdRecord, ...prev]);
@@ -221,6 +233,66 @@ export function AdminDashboard({
     } finally {
       setCreating(false);
     }
+  }
+
+  async function handleSaveSeating(assignments: SeatingAssignmentPayload[]) {
+    if (usingMockData) {
+      const assignmentMap = new Map(assignments.map((item) => [item.id, item]));
+      setLocalRecords((prev) =>
+        prev.map((record) => {
+          const assignment = assignmentMap.get(record.id);
+          if (assignment && record.attending) {
+            return {
+              ...record,
+              seatAssigned: true,
+              seatOrder: assignment.seatOrder,
+              seatPosition: assignment.seatPosition,
+            };
+          }
+
+          return {
+            ...record,
+            seatAssigned: false,
+            seatOrder: null,
+            seatPosition: null,
+          };
+        }),
+      );
+      return;
+    }
+
+    const response = await fetch('/api/rsvp/seating', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignments }),
+    });
+    const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.message ?? '儲存座位失敗，請稍後再試。');
+    }
+
+    const assignmentMap = new Map(assignments.map((item) => [item.id, item]));
+    setLocalRecords((prev) =>
+      prev.map((record) => {
+        const assignment = assignmentMap.get(record.id);
+        if (assignment && record.attending) {
+          return {
+            ...record,
+            seatAssigned: true,
+            seatOrder: assignment.seatOrder,
+            seatPosition: assignment.seatPosition,
+          };
+        }
+
+        return {
+          ...record,
+          seatAssigned: false,
+          seatOrder: null,
+          seatPosition: null,
+        };
+      }),
+    );
   }
 
   const totalPages = Math.max(1, Math.ceil(filteredRecordsForResponses.length / PAGE_SIZE));
@@ -460,7 +532,9 @@ export function AdminDashboard({
         </section>
       ) : (
         <SeatingPlannerTab
-          records={filteredRecordsForSeating}
+          records={localRecords}
+          filteredGuestIds={filteredGuestIdsForSeating}
+          onSave={handleSaveSeating}
           filtersPanel={
             <RsvpFiltersPanel
               selectedSides={selectedSides}

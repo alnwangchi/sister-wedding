@@ -14,6 +14,8 @@ export type RsvpRecord = {
   relationshipTag: RelationshipTag;
   message: string;
   seatAssigned: boolean;
+  seatOrder: number | null;
+  seatPosition: string | null;
   createdAt: string;
 };
 

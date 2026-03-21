@@ -28,6 +28,8 @@ export const mockRsvps: RsvpRecord[] = Array.from({ length: 30 }, (_, index) => 
     relationshipTag: (["classmate", "colleague", "friend"] as const)[index % 3],
     message: attending ? messages[index % messages.length] : "當天另有行程，但先送上祝福。",
     seatAssigned: attending && index % 5 === 0,
+    seatOrder: attending && index % 5 === 0 ? ((index % 10) + 1) : null,
+    seatPosition: attending && index % 5 === 0 ? `主桌 A - ${((index % 10) + 1).toString()}` : null,
     createdAt: new Date(Date.UTC(2026, 2, 30 - index, 10, index % 60)).toISOString(),
   };
 });

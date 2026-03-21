@@ -4,16 +4,50 @@ import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 're
 
 import type { RsvpRecord } from '@/types/rsvp';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const TABLE_CAPACITY = 10;
 const DRAG_MIME_TYPE = 'application/x-rsvp-guest-id';
 
 type SeatingPlannerTabProps = {
   records: RsvpRecord[];
+  filteredGuestIds?: string[];
   filtersPanel?: ReactNode;
+  onSave: (assignments: Array<{ id: string; seatOrder: number; seatPosition: string }>) => Promise<void>;
 };
 
-export function SeatingPlannerTab({ records, filtersPanel }: SeatingPlannerTabProps) {
+function getSavedSeatAssignments(records: RsvpRecord[]) {
+  const seats = Array.from({ length: TABLE_CAPACITY }, () => null as string | null);
+
+  records.forEach((record) => {
+    if (!record.attending || !record.seatAssigned || typeof record.seatOrder !== 'number') {
+      return;
+    }
+
+    const seatIndex = record.seatOrder - 1;
+    if (seatIndex < 0 || seatIndex >= TABLE_CAPACITY || seats[seatIndex] !== null) {
+      return;
+    }
+
+    seats[seatIndex] = record.id;
+  });
+
+  return seats;
+}
+
+export function SeatingPlannerTab({
+  records,
+  filteredGuestIds,
+  filtersPanel,
+  onSave,
+}: SeatingPlannerTabProps) {
   const attendingGuests = useMemo(
     () =>
       records
@@ -26,13 +60,33 @@ export function SeatingPlannerTab({ records, filtersPanel }: SeatingPlannerTabPr
     [records],
   );
 
-  const [seatAssignments, setSeatAssignments] = useState<Array<string | null>>(() =>
-    Array.from({ length: TABLE_CAPACITY }, () => null),
+  const filteredGuestIdSet = useMemo(
+    () => (filteredGuestIds ? new Set(filteredGuestIds) : null),
+    [filteredGuestIds],
   );
+
+  const [seatAssignments, setSeatAssignments] = useState<Array<string | null>>(() =>
+    getSavedSeatAssignments(records),
+  );
+  const [lastSavedSeatAssignments, setLastSavedSeatAssignments] = useState<Array<string | null>>(() =>
+    getSavedSeatAssignments(records),
+  );
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [saveError, setSaveError] = useState(false);
 
   useEffect(() => {
     const validGuestIds = new Set(attendingGuests.map((guest) => guest.id));
     setSeatAssignments((prev) =>
+      prev.map((guestId) => {
+        if (!guestId) {
+          return null;
+        }
+        return validGuestIds.has(guestId) ? guestId : null;
+      }),
+    );
+    setLastSavedSeatAssignments((prev) =>
       prev.map((guestId) => {
         if (!guestId) {
           return null;
@@ -48,11 +102,22 @@ export function SeatingPlannerTab({ records, filtersPanel }: SeatingPlannerTabPr
   );
 
   const unassignedGuests = useMemo(
-    () => attendingGuests.filter((guest) => !assignedGuestIds.has(guest.id)),
-    [assignedGuestIds, attendingGuests],
+    () =>
+      attendingGuests.filter((guest) => {
+        const matchFilter = filteredGuestIdSet ? filteredGuestIdSet.has(guest.id) : true;
+        return matchFilter && !assignedGuestIds.has(guest.id);
+      }),
+    [assignedGuestIds, attendingGuests, filteredGuestIdSet],
   );
 
   const seatedCount = assignedGuestIds.size;
+  const hasUnsavedChanges = useMemo(
+    () =>
+      seatAssignments.some((guestId, index) => {
+        return guestId !== lastSavedSeatAssignments[index];
+      }),
+    [lastSavedSeatAssignments, seatAssignments],
+  );
 
   function handleGuestDragStart(event: DragEvent<HTMLDivElement>, guestId: string) {
     event.dataTransfer.effectAllowed = 'move';
@@ -98,6 +163,36 @@ export function SeatingPlannerTab({ records, filtersPanel }: SeatingPlannerTabPr
     setSeatAssignments(Array.from({ length: TABLE_CAPACITY }, () => null));
   }
 
+  async function handleSaveSeats() {
+    setIsSaving(true);
+    setSaveMessage('');
+    setSaveError(false);
+
+    try {
+      const assignments = seatAssignments.flatMap((guestId, index) =>
+        guestId
+          ? [
+              {
+                id: guestId,
+                seatOrder: index + 1,
+                seatPosition: `主桌 A - ${index + 1}`,
+              },
+            ]
+          : [],
+      );
+
+      await onSave(assignments);
+      setLastSavedSeatAssignments([...seatAssignments]);
+      setSaveMessage('座位安排已儲存。');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '儲存失敗，請稍後再試。';
+      setSaveMessage(message);
+      setSaveError(true);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <section className='rounded-[2rem] border border-rose-100 bg-white/90 p-6 shadow-sm'>
       <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -107,10 +202,34 @@ export function SeatingPlannerTab({ records, filtersPanel }: SeatingPlannerTabPr
             先拖拉上方賓客到下方圓桌座位，單桌共 {TABLE_CAPACITY} 位。
           </p>
         </div>
-        <Button type='button' variant='outline' className='rounded-full' onClick={resetSeats}>
-          重置座位
-        </Button>
+        <div className='flex items-center gap-2'>
+          <Button
+            type='button'
+            variant='outline'
+            className='rounded-full'
+            onClick={() => setResetDialogOpen(true)}
+          >
+            重置座位
+          </Button>
+          <Button
+            type='button'
+            className='rounded-full'
+            onClick={() => void handleSaveSeats()}
+            disabled={isSaving || !hasUnsavedChanges}
+          >
+            {isSaving ? '儲存中...' : '儲存安排'}
+          </Button>
+        </div>
       </div>
+      {saveMessage ? (
+        <p
+          className={`mt-3 rounded-xl px-3 py-2 text-sm ${
+            saveError ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+          }`}
+        >
+          {saveMessage}
+        </p>
+      ) : null}
 
       <div className='mt-4 rounded-3xl border border-rose-100 bg-rose-50/40 p-4'>
         {filtersPanel ? <div className='mb-4'>{filtersPanel}</div> : null}
@@ -191,6 +310,32 @@ export function SeatingPlannerTab({ records, filtersPanel }: SeatingPlannerTabPr
           })}
         </div>
       </div>
+
+      <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>確認重置座位</DialogTitle>
+            <DialogDescription>
+              這會清空目前所有座位安排，且無法復原。是否確定要重置？
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type='button' variant='outline' onClick={() => setResetDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              type='button'
+              variant='destructive'
+              onClick={() => {
+                resetSeats();
+                setResetDialogOpen(false);
+              }}
+            >
+              確認重置
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
