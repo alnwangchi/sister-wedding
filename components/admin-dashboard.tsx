@@ -40,6 +40,9 @@ export function AdminDashboard({
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]['id']>('responses');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSides, setSelectedSides] = useState<Array<'groom' | 'bride'>>([]);
+  const [selectedRelationshipTags, setSelectedRelationshipTags] = useState<
+    Array<'classmate' | 'colleague' | 'friend'>
+  >([]);
   const [selectedVegetarianStatus, setSelectedVegetarianStatus] = useState<Array<'yes' | 'no'>>([]);
   const [selectedAttendingStatus, setSelectedAttendingStatus] = useState<Array<'yes' | 'no'>>([]);
   const [localRecords, setLocalRecords] = useState(records);
@@ -49,6 +52,9 @@ export function AdminDashboard({
   const [newGuestName, setNewGuestName] = useState('');
   const [newGuestVegetarian, setNewGuestVegetarian] = useState(false);
   const [newGuestSide, setNewGuestSide] = useState<'groom' | 'bride'>('groom');
+  const [newGuestRelationshipTag, setNewGuestRelationshipTag] = useState<
+    'classmate' | 'colleague' | 'friend'
+  >('friend');
   const [createError, setCreateError] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -74,10 +80,19 @@ export function AdminDashboard({
       const attendingMatched =
         selectedAttendingStatus.length === 0 ||
         selectedAttendingStatus.includes(record.attending ? 'yes' : 'no');
+      const relationshipTagMatched =
+        selectedRelationshipTags.length === 0 ||
+        selectedRelationshipTags.includes(record.relationshipTag);
 
-      return sideMatched && vegetarianMatched && attendingMatched;
+      return sideMatched && vegetarianMatched && attendingMatched && relationshipTagMatched;
     });
-  }, [localRecords, selectedAttendingStatus, selectedSides, selectedVegetarianStatus]);
+  }, [
+    localRecords,
+    selectedAttendingStatus,
+    selectedRelationshipTags,
+    selectedSides,
+    selectedVegetarianStatus,
+  ]);
 
   function handleDeleteClick(record: RsvpRecord) {
     if (usingMockData) {
@@ -134,6 +149,7 @@ export function AdminDashboard({
           email: '',
           vegetarian: newGuestVegetarian ? 'vegetarian' : 'none',
           side: newGuestSide,
+          relationshipTag: newGuestRelationshipTag,
           message: '',
           seatAssigned: false,
           createdAt: new Date().toISOString(),
@@ -144,6 +160,7 @@ export function AdminDashboard({
         setNewGuestName('');
         setNewGuestVegetarian(false);
         setNewGuestSide('groom');
+        setNewGuestRelationshipTag('friend');
         return;
       }
 
@@ -154,6 +171,7 @@ export function AdminDashboard({
           name,
           vegetarian: newGuestVegetarian,
           side: newGuestSide,
+          relationshipTag: newGuestRelationshipTag,
         }),
       });
       const payload = (await response.json().catch(() => null)) as {
@@ -172,6 +190,7 @@ export function AdminDashboard({
       setNewGuestName('');
       setNewGuestVegetarian(false);
       setNewGuestSide('groom');
+      setNewGuestRelationshipTag('friend');
     } catch (error) {
       const message = error instanceof Error ? error.message : '新增失敗，請稍後再試。';
       setCreateError(message);
@@ -243,6 +262,7 @@ export function AdminDashboard({
                     onClick={() => {
                       setCurrentPage(1);
                       setSelectedSides([]);
+                      setSelectedRelationshipTags([]);
                       setSelectedVegetarianStatus([]);
                       setSelectedAttendingStatus([]);
                     }}
@@ -292,6 +312,20 @@ export function AdminDashboard({
                       toggleMultiSelect(value, setSelectedAttendingStatus);
                     }}
                   />
+
+                  <FilterGroup
+                    label='關係標籤'
+                    options={[
+                      { value: 'classmate', label: '同學' },
+                      { value: 'colleague', label: '同事' },
+                      { value: 'friend', label: '朋友' },
+                    ]}
+                    selectedValues={selectedRelationshipTags}
+                    onToggle={(value) => {
+                      setCurrentPage(1);
+                      toggleMultiSelect(value, setSelectedRelationshipTags);
+                    }}
+                  />
                 </div>
               </div>
 
@@ -328,6 +362,7 @@ export function AdminDashboard({
                       <TableHead>電子信箱</TableHead>
                       <TableHead>吃素需求</TableHead>
                       <TableHead>親友別</TableHead>
+                      <TableHead>關係標籤</TableHead>
                       <TableHead>座位安排</TableHead>
                       <TableHead className='min-w-[16rem]'>留言</TableHead>
                       <TableHead className='w-20 text-center'>刪除</TableHead>
@@ -345,6 +380,7 @@ export function AdminDashboard({
                           {record.vegetarian === null ? '—' : vegetarianLabel[record.vegetarian]}
                         </TableCell>
                         <TableCell>{record.side === 'groom' ? '男方' : '女方'}</TableCell>
+                        <TableCell>{relationshipTagLabel[record.relationshipTag]}</TableCell>
                         <TableCell>
                           {record.attending
                             ? record.seatAssigned
@@ -470,6 +506,7 @@ export function AdminDashboard({
             setNewGuestName('');
             setNewGuestVegetarian(false);
             setNewGuestSide('groom');
+            setNewGuestRelationshipTag('friend');
           }
         }}
       >
@@ -477,7 +514,7 @@ export function AdminDashboard({
           <DialogHeader>
             <DialogTitle>新增賓客</DialogTitle>
             <DialogDescription>
-              請填寫姓名、是否吃素與男方/女方，其餘資料會套用預設值。
+              請填寫姓名、是否吃素、男方/女方與關係標籤，其餘資料會套用預設值。
             </DialogDescription>
           </DialogHeader>
           <form className='space-y-4 mt-2' onSubmit={(event) => void handleCreateGuest(event)}>
@@ -537,6 +574,44 @@ export function AdminDashboard({
                 </label>
               </div>
             </div>
+            <div className='space-y-1.5'>
+              <p className='text-sm font-medium text-stone-700'>關係標籤</p>
+              <div className='grid grid-cols-3 gap-3'>
+                <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
+                  <input
+                    type='radio'
+                    name='new-guest-relationship-tag'
+                    value='classmate'
+                    checked={newGuestRelationshipTag === 'classmate'}
+                    onChange={() => setNewGuestRelationshipTag('classmate')}
+                    disabled={creating}
+                  />
+                  同學
+                </label>
+                <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
+                  <input
+                    type='radio'
+                    name='new-guest-relationship-tag'
+                    value='colleague'
+                    checked={newGuestRelationshipTag === 'colleague'}
+                    onChange={() => setNewGuestRelationshipTag('colleague')}
+                    disabled={creating}
+                  />
+                  同事
+                </label>
+                <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
+                  <input
+                    type='radio'
+                    name='new-guest-relationship-tag'
+                    value='friend'
+                    checked={newGuestRelationshipTag === 'friend'}
+                    onChange={() => setNewGuestRelationshipTag('friend')}
+                    disabled={creating}
+                  />
+                  朋友
+                </label>
+              </div>
+            </div>
             {createError ? (
               <p className='rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700'>{createError}</p>
             ) : null}
@@ -574,6 +649,12 @@ const vegetarianLabel = {
   vegetarian: '蛋奶素',
   vegan: '全素',
   other: '其他',
+} as const;
+
+const relationshipTagLabel = {
+  classmate: '同學',
+  colleague: '同事',
+  friend: '朋友',
 } as const;
 
 function toggleMultiSelect<T>(value: T, setter: React.Dispatch<React.SetStateAction<T[]>>) {

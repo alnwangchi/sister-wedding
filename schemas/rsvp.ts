@@ -21,6 +21,9 @@ export const rsvpSchema = z
     side: z.enum(['groom', 'bride'], {
       error: '請選擇男方或女方親友',
     }),
+    relationshipTag: z.enum(['classmate', 'colleague', 'friend'], {
+      error: '請選擇關係標籤',
+    }),
     message: z.string().trim().max(300, '想說的話請控制在 300 字內').default(''),
   })
   .superRefine((data, ctx) => {

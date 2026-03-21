@@ -175,7 +175,7 @@ export function SeatingPlannerTab({ records }: SeatingPlannerTabProps) {
                     <button
                       type='button'
                       onClick={() => clearSeat(index)}
-                      className='mt-1 rounded-full bg-white px-2 py-0.5 text-[10px] text-stone-500 hover:text-rose-600'
+                      className='mt-1 cursor-pointer rounded-full bg-white px-2 py-0.5 text-[10px] text-stone-500 hover:text-rose-600'
                     >
                       移除
                     </button>

@@ -1,5 +1,6 @@
 export type AttendanceSide = "groom" | "bride";
 export type VegetarianOption = "none" | "vegetarian" | "vegan" | "other";
+export type RelationshipTag = "classmate" | "colleague" | "friend";
 
 export type RsvpRecord = {
   id: string;
@@ -10,6 +11,7 @@ export type RsvpRecord = {
   email: string;
   vegetarian: VegetarianOption | null;
   side: AttendanceSide;
+  relationshipTag: RelationshipTag;
   message: string;
   seatAssigned: boolean;
   createdAt: string;

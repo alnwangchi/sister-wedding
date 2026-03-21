@@ -27,6 +27,12 @@ const sideLabels = {
   bride: "女方親友",
 } as const;
 
+const relationshipTagLabels = {
+  classmate: "同學",
+  colleague: "同事",
+  friend: "朋友",
+} as const;
+
 export function RsvpConfirmation() {
   const router = useRouter();
   const [draft, setDraft] = useState<RsvpFormValues | null>(null);
@@ -141,6 +147,7 @@ export function RsvpConfirmation() {
             value={draft.attending === "no" ? "不適用" : vegetarianLabels[draft.vegetarian ?? "none"]}
           />
           <Field label="男方或女方親友" value={sideLabels[draft.side]} />
+          <Field label="關係標籤" value={relationshipTagLabels[draft.relationshipTag]} />
           <Field label="想說的話" value={draft.message || "（未填寫）"} isLast />
         </div>
       ) : null}

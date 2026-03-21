@@ -28,6 +28,7 @@ const defaultValues: RsvpFormInput = {
   email: "",
   vegetarian: "none",
   side: "groom",
+  relationshipTag: "friend",
   message: "",
 };
 export function RsvpForm() {
@@ -200,6 +201,38 @@ export function RsvpForm() {
           <label className={radioClassName}>
             <input type="radio" value="bride" suppressHydrationWarning {...register("side")} />
             女方親友
+          </label>
+        </div>
+      </Field>
+
+      <Field label="關係標籤" error={errors.relationshipTag?.message}>
+        <div className="mt-1 grid grid-cols-3 gap-3">
+          <label className={radioClassName}>
+            <input
+              type="radio"
+              value="classmate"
+              suppressHydrationWarning
+              {...register("relationshipTag")}
+            />
+            同學
+          </label>
+          <label className={radioClassName}>
+            <input
+              type="radio"
+              value="colleague"
+              suppressHydrationWarning
+              {...register("relationshipTag")}
+            />
+            同事
+          </label>
+          <label className={radioClassName}>
+            <input
+              type="radio"
+              value="friend"
+              suppressHydrationWarning
+              {...register("relationshipTag")}
+            />
+            朋友
           </label>
         </div>
       </Field>

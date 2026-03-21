@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       email: parsed.data.email,
       vegetarian: parsed.data.vegetarian,
       side: parsed.data.side,
+      relationshipTag: parsed.data.relationshipTag,
       message: parsed.data.message,
       seatAssigned: false,
     });

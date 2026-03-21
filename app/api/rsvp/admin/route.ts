@@ -10,6 +10,9 @@ const adminCreateSchema = z.object({
   side: z.enum(["groom", "bride"], {
     error: "請選擇男方或女方",
   }),
+  relationshipTag: z.enum(["classmate", "colleague", "friend"], {
+    error: "請選擇關係標籤",
+  }),
 });
 
 export async function POST(request: Request) {
@@ -42,6 +45,7 @@ export async function POST(request: Request) {
       email: "",
       vegetarian: parsed.data.vegetarian ? "vegetarian" : "none",
       side: parsed.data.side,
+      relationshipTag: parsed.data.relationshipTag,
       message: "",
       seatAssigned: false,
     });
@@ -57,6 +61,7 @@ export async function POST(request: Request) {
         email: "",
         vegetarian: parsed.data.vegetarian ? "vegetarian" : "none",
         side: parsed.data.side,
+        relationshipTag: parsed.data.relationshipTag,
         message: "",
         seatAssigned: false,
         createdAt: new Date().toISOString(),

@@ -25,6 +25,7 @@ export const mockRsvps: RsvpRecord[] = Array.from({ length: 30 }, (_, index) => 
     email: `guest${String(number).padStart(2, "0")}@example.com`,
     vegetarian: attending ? (["none", "vegetarian", "vegan", "other"] as const)[index % 4] : null,
     side: index % 2 === 0 ? "groom" : "bride",
+    relationshipTag: (["classmate", "colleague", "friend"] as const)[index % 3],
     message: attending ? messages[index % messages.length] : "當天另有行程，但先送上祝福。",
     seatAssigned: attending && index % 5 === 0,
     createdAt: new Date(Date.UTC(2026, 2, 30 - index, 10, index % 60)).toISOString(),
