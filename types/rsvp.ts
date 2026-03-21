@@ -11,7 +11,6 @@ export type RsvpRecord = {
   vegetarian: VegetarianOption | null;
   side: AttendanceSide;
   message: string;
-  needEDM: boolean;
   seatAssigned: boolean;
   createdAt: string;
 };

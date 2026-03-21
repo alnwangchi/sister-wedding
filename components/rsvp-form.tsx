@@ -28,7 +28,6 @@ const defaultValues: RsvpFormInput = {
   vegetarian: "none",
   side: "groom",
   message: "",
-  needEDM: "yes",
 };
 export function RsvpForm() {
   const router = useRouter();
@@ -163,19 +162,6 @@ export function RsvpForm() {
           suppressHydrationWarning
           {...register("email")}
         />
-      </Field>
-
-      <Field label="是否需要電子喜帖" error={errors.needEDM?.message}>
-        <div className="mt-1 grid grid-cols-2 gap-3">
-          <label className={radioClassName}>
-            <input type="radio" value="yes" suppressHydrationWarning {...register("needEDM")} />
-            需要
-          </label>
-          <label className={radioClassName}>
-            <input type="radio" value="no" suppressHydrationWarning {...register("needEDM")} />
-            不需要
-          </label>
-        </div>
       </Field>
 
       {attending === "yes" ? (

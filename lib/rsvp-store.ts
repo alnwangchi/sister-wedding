@@ -21,7 +21,8 @@ export async function createRsvp(input: CreateRsvpInput) {
     createdAt: Timestamp.now(),
   };
 
-  await addDoc(collection(db, COLLECTION_NAME), payload);
+  const docRef = await addDoc(collection(db, COLLECTION_NAME), payload);
+  return docRef.id;
 }
 
 export async function listRsvps(): Promise<RsvpRecord[]> {
@@ -46,7 +47,6 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
       vegetarian: (data.vegetarian ?? null) as RsvpRecord["vegetarian"],
       side: (data.side ?? "groom") as RsvpRecord["side"],
       message: String(data.message ?? ""),
-      needEDM: Boolean(data.needEDM),
       seatAssigned: Boolean(data.seatAssigned),
       createdAt,
     };

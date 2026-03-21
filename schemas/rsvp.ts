@@ -22,9 +22,6 @@ export const rsvpSchema = z
       error: '請選擇男方或女方親友',
     }),
     message: z.string().trim().max(300, '想說的話請控制在 300 字內').default(''),
-    needEDM: z.enum(['yes', 'no'], {
-      error: '請選擇是否需要電子喜帖',
-    }),
   })
   .superRefine((data, ctx) => {
     if (data.attending === 'yes' && data.guestCount < 1) {

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { cn } from '@/lib/utils';
 import type { RsvpRecord } from '@/types/rsvp';
 import { Button } from '@/components/ui/button';
 import { SeatingPlannerTab } from '@/components/seating-planner-tab';
@@ -34,21 +33,24 @@ const PAGE_SIZE = 20;
 export function AdminDashboard({
   records,
   usingMockData,
-  firebaseConfigured,
 }: {
   records: RsvpRecord[];
   usingMockData: boolean;
-  firebaseConfigured: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]['id']>('responses');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSides, setSelectedSides] = useState<Array<'groom' | 'bride'>>([]);
   const [selectedVegetarianStatus, setSelectedVegetarianStatus] = useState<Array<'yes' | 'no'>>([]);
-  const [selectedEdmStatus, setSelectedEdmStatus] = useState<Array<'yes' | 'no'>>([]);
   const [selectedAttendingStatus, setSelectedAttendingStatus] = useState<Array<'yes' | 'no'>>([]);
   const [localRecords, setLocalRecords] = useState(records);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDeleteRecord, setPendingDeleteRecord] = useState<RsvpRecord | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newGuestName, setNewGuestName] = useState('');
+  const [newGuestVegetarian, setNewGuestVegetarian] = useState(false);
+  const [newGuestSide, setNewGuestSide] = useState<'groom' | 'bride'>('groom');
+  const [createError, setCreateError] = useState('');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     setLocalRecords(records);
@@ -57,9 +59,8 @@ export function AdminDashboard({
   const stats = useMemo(() => {
     const attendingCount = localRecords.filter((record) => record.attending).length;
     const totalGuests = localRecords.reduce((sum, record) => sum + record.guestCount, 0);
-    const needEDMCount = localRecords.filter((record) => record.needEDM).length;
 
-    return { attendingCount, totalGuests, needEDMCount };
+    return { attendingCount, totalGuests };
   }, [localRecords]);
 
   const filteredRecords = useMemo(() => {
@@ -70,21 +71,13 @@ export function AdminDashboard({
       const vegetarianMatched =
         selectedVegetarianStatus.length === 0 ||
         (vegetarianStatus !== null && selectedVegetarianStatus.includes(vegetarianStatus));
-      const edmMatched =
-        selectedEdmStatus.length === 0 || selectedEdmStatus.includes(record.needEDM ? 'yes' : 'no');
       const attendingMatched =
         selectedAttendingStatus.length === 0 ||
         selectedAttendingStatus.includes(record.attending ? 'yes' : 'no');
 
-      return sideMatched && vegetarianMatched && edmMatched && attendingMatched;
+      return sideMatched && vegetarianMatched && attendingMatched;
     });
-  }, [
-    localRecords,
-    selectedAttendingStatus,
-    selectedEdmStatus,
-    selectedSides,
-    selectedVegetarianStatus,
-  ]);
+  }, [localRecords, selectedAttendingStatus, selectedSides, selectedVegetarianStatus]);
 
   function handleDeleteClick(record: RsvpRecord) {
     if (usingMockData) {
@@ -118,6 +111,75 @@ export function AdminDashboard({
     }
   }
 
+  async function handleCreateGuest(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newGuestName.trim();
+
+    if (!name) {
+      setCreateError('請輸入姓名。');
+      return;
+    }
+
+    setCreating(true);
+    setCreateError('');
+
+    try {
+      if (usingMockData) {
+        const createdRecord: RsvpRecord = {
+          id: `mock-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+          name,
+          phone: '',
+          attending: true,
+          guestCount: 0,
+          email: '',
+          vegetarian: newGuestVegetarian ? 'vegetarian' : 'none',
+          side: newGuestSide,
+          message: '',
+          seatAssigned: false,
+          createdAt: new Date().toISOString(),
+        };
+        setLocalRecords((prev) => [createdRecord, ...prev]);
+        setCurrentPage(1);
+        setCreateDialogOpen(false);
+        setNewGuestName('');
+        setNewGuestVegetarian(false);
+        setNewGuestSide('groom');
+        return;
+      }
+
+      const response = await fetch('/api/rsvp/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          vegetarian: newGuestVegetarian,
+          side: newGuestSide,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+        record?: RsvpRecord;
+      } | null;
+
+      if (!response.ok || !payload?.record) {
+        throw new Error(payload?.message ?? '新增失敗，請稍後再試。');
+      }
+
+      const createdRecord = payload.record;
+      setLocalRecords((prev) => [createdRecord, ...prev]);
+      setCurrentPage(1);
+      setCreateDialogOpen(false);
+      setNewGuestName('');
+      setNewGuestVegetarian(false);
+      setNewGuestSide('groom');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '新增失敗，請稍後再試。';
+      setCreateError(message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const currentRecords = useMemo(() => {
@@ -144,17 +206,8 @@ export function AdminDashboard({
       </div>
 
       {usingMockData ? (
-        <div
-          className={cn(
-            'rounded-[1.75rem] border px-5 py-4 text-sm shadow-sm',
-            firebaseConfigured
-              ? 'border-amber-200 bg-amber-50 text-amber-700'
-              : 'border-sky-200 bg-sky-50 text-sky-700',
-          )}
-        >
-          {firebaseConfigured
-            ? '目前尚未收到實際 RSVP，先以 30 筆假資料展示後台列表樣式。'
-            : '目前尚未設定 Firebase，後台先以 30 筆假資料展示表格與分頁。'}
+        <div className='rounded-[1.75rem] border border-sky-200 bg-sky-50 px-5 py-4 text-sm text-sky-700 shadow-sm'>
+          目前為 Mock 模式（網址帶有 ?mock=true），資料僅供示範，不會寫入 Firebase。
         </div>
       ) : null}
 
@@ -191,7 +244,6 @@ export function AdminDashboard({
                       setCurrentPage(1);
                       setSelectedSides([]);
                       setSelectedVegetarianStatus([]);
-                      setSelectedEdmStatus([]);
                       setSelectedAttendingStatus([]);
                     }}
                     variant='outline'
@@ -229,19 +281,6 @@ export function AdminDashboard({
                   />
 
                   <FilterGroup
-                    label='電子喜帖'
-                    options={[
-                      { value: 'yes', label: '需要' },
-                      { value: 'no', label: '不需要' },
-                    ]}
-                    selectedValues={selectedEdmStatus}
-                    onToggle={(value) => {
-                      setCurrentPage(1);
-                      toggleMultiSelect(value, setSelectedEdmStatus);
-                    }}
-                  />
-
-                  <FilterGroup
                     label='是否參加'
                     options={[
                       { value: 'yes', label: '參加' },
@@ -263,6 +302,21 @@ export function AdminDashboard({
               ) : null}
 
               <div className='rounded-3xl border border-rose-100'>
+                <div className='flex items-center justify-end border-b border-rose-100 px-4 py-3'>
+                  <Button
+                    type='button'
+                    size='icon'
+                    onClick={() => {
+                      setCreateError('');
+                      setCreateDialogOpen(true);
+                    }}
+                    className='h-8 w-8 rounded-full'
+                    title='新增賓客'
+                  >
+                    <span className='text-lg leading-none'>＋</span>
+                    <span className='sr-only'>新增賓客</span>
+                  </Button>
+                </div>
                 <Table>
                   <TableCaption>每頁顯示 20 筆，可搭配上方篩選條件快速檢視資料。</TableCaption>
                   <TableHeader>
@@ -274,7 +328,6 @@ export function AdminDashboard({
                       <TableHead>電子信箱</TableHead>
                       <TableHead>吃素需求</TableHead>
                       <TableHead>親友別</TableHead>
-                      <TableHead>電子喜帖</TableHead>
                       <TableHead>座位安排</TableHead>
                       <TableHead className='min-w-[16rem]'>留言</TableHead>
                       <TableHead className='w-20 text-center'>刪除</TableHead>
@@ -292,7 +345,6 @@ export function AdminDashboard({
                           {record.vegetarian === null ? '—' : vegetarianLabel[record.vegetarian]}
                         </TableCell>
                         <TableCell>{record.side === 'groom' ? '男方' : '女方'}</TableCell>
-                        <TableCell>{record.needEDM ? '需要' : '不需要'}</TableCell>
                         <TableCell>
                           {record.attending
                             ? record.seatAssigned
@@ -376,14 +428,16 @@ export function AdminDashboard({
         <SeatingPlannerTab records={localRecords} />
       )}
 
-      <div className='text-right text-sm text-stone-400'>需要電子喜帖：{stats.needEDMCount} 筆</div>
-
-      <Dialog open={pendingDeleteRecord !== null} onOpenChange={(open) => !open && setPendingDeleteRecord(null)}>
+      <Dialog
+        open={pendingDeleteRecord !== null}
+        onOpenChange={(open) => !open && setPendingDeleteRecord(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>確認刪除資料</DialogTitle>
             <DialogDescription>
-              你即將刪除「{pendingDeleteRecord?.name ?? '這筆回覆'}」的 RSVP 資料，刪除後無法復原。是否確定刪除？
+              你即將刪除「{pendingDeleteRecord?.name ?? '這筆回覆'}」的 RSVP
+              資料，刪除後無法復原。是否確定刪除？
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -404,6 +458,100 @@ export function AdminDashboard({
               確認
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createDialogOpen}
+        onOpenChange={(open) => {
+          setCreateDialogOpen(open);
+          if (!open) {
+            setCreateError('');
+            setNewGuestName('');
+            setNewGuestVegetarian(false);
+            setNewGuestSide('groom');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>新增賓客</DialogTitle>
+            <DialogDescription>請填寫姓名、是否吃素與男方/女方，其餘資料會套用預設值。</DialogDescription>
+          </DialogHeader>
+          <form className='space-y-4 mt-2' onSubmit={(event) => void handleCreateGuest(event)}>
+            <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
+              <div className='flex flex-1 items-center gap-2'>
+                <label
+                  htmlFor='new-guest-name'
+                  className='shrink-0 text-sm font-medium text-stone-700'
+                >
+                  姓名
+                </label>
+                <input
+                  id='new-guest-name'
+                  value={newGuestName}
+                  onChange={(event) => setNewGuestName(event.target.value)}
+                  disabled={creating}
+                  maxLength={12}
+                  className='w-full rounded-xl border border-rose-200 px-3 py-2 text-sm outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-200'
+                  placeholder='請輸入姓名'
+                />
+              </div>
+              <label className='flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-sm text-stone-700'>
+                <input
+                  type='checkbox'
+                  checked={newGuestVegetarian}
+                  onChange={(event) => setNewGuestVegetarian(event.target.checked)}
+                  disabled={creating}
+                  className='h-4 w-4 rounded border-rose-300 text-rose-500 focus:ring-rose-400'
+                />
+                <span>是否吃素</span>
+              </label>
+            </div>
+            <div className='space-y-1.5'>
+              <p className='text-sm font-medium text-stone-700'>男方或女方親友</p>
+              <div className='grid grid-cols-2 gap-3'>
+                <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
+                  <input
+                    type='radio'
+                    name='new-guest-side'
+                    value='groom'
+                    checked={newGuestSide === 'groom'}
+                    onChange={() => setNewGuestSide('groom')}
+                    disabled={creating}
+                  />
+                  男方親友
+                </label>
+                <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
+                  <input
+                    type='radio'
+                    name='new-guest-side'
+                    value='bride'
+                    checked={newGuestSide === 'bride'}
+                    onChange={() => setNewGuestSide('bride')}
+                    disabled={creating}
+                  />
+                  女方親友
+                </label>
+              </div>
+            </div>
+            {createError ? (
+              <p className='rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700'>{createError}</p>
+            ) : null}
+            <DialogFooter>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => setCreateDialogOpen(false)}
+                disabled={creating}
+              >
+                取消
+              </Button>
+              <Button type='submit' disabled={creating}>
+                {creating ? '新增中...' : '新增'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

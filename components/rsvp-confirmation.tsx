@@ -27,11 +27,6 @@ const sideLabels = {
   bride: "女方親友",
 } as const;
 
-const edmLabels = {
-  yes: "需要",
-  no: "不需要",
-} as const;
-
 export function RsvpConfirmation() {
   const router = useRouter();
   const [draft, setDraft] = useState<RsvpFormValues | null>(null);
@@ -146,8 +141,7 @@ export function RsvpConfirmation() {
             value={draft.attending === "no" ? "不適用" : vegetarianLabels[draft.vegetarian ?? "none"]}
           />
           <Field label="男方或女方親友" value={sideLabels[draft.side]} />
-          <Field label="想說的話" value={draft.message || "（未填寫）"} />
-          <Field label="是否需要電子喜帖" value={edmLabels[draft.needEDM]} isLast />
+          <Field label="想說的話" value={draft.message || "（未填寫）"} isLast />
         </div>
       ) : null}
 

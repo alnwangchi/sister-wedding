@@ -36,7 +36,6 @@ export async function POST(request: Request) {
       vegetarian: parsed.data.vegetarian,
       side: parsed.data.side,
       message: parsed.data.message,
-      needEDM: parsed.data.needEDM === "yes",
       seatAssigned: false,
     });
 
