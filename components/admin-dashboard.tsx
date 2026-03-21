@@ -253,7 +253,7 @@ export function AdminDashboard({
                     清除篩選
                   </Button>
                 </div>
-                <div className='flex flex-wrap items-center gap-x-5 gap-y-2'>
+                <div className='flex flex-wrap items-center gap-x-14 gap-y-2'>
                   <FilterGroup
                     label='男方 / 女方'
                     options={[
@@ -320,7 +320,7 @@ export function AdminDashboard({
                 <Table>
                   <TableCaption>每頁顯示 20 筆，可搭配上方篩選條件快速檢視資料。</TableCaption>
                   <TableHeader>
-                    <TableRow className='hover:bg-transparent'>
+                    <TableRow className='border-rose-100 hover:bg-transparent'>
                       <TableHead>姓名</TableHead>
                       <TableHead>電話</TableHead>
                       <TableHead>是否參加</TableHead>
@@ -335,7 +335,7 @@ export function AdminDashboard({
                   </TableHeader>
                   <TableBody>
                     {currentRecords.map((record) => (
-                      <TableRow key={record.id}>
+                      <TableRow key={record.id} className='border-rose-100'>
                         <TableCell className='font-medium text-stone-700'>{record.name}</TableCell>
                         <TableCell>{record.phone}</TableCell>
                         <TableCell>{record.attending ? '會參加' : '無法參加'}</TableCell>
@@ -476,7 +476,9 @@ export function AdminDashboard({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>新增賓客</DialogTitle>
-            <DialogDescription>請填寫姓名、是否吃素與男方/女方，其餘資料會套用預設值。</DialogDescription>
+            <DialogDescription>
+              請填寫姓名、是否吃素與男方/女方，其餘資料會套用預設值。
+            </DialogDescription>
           </DialogHeader>
           <form className='space-y-4 mt-2' onSubmit={(event) => void handleCreateGuest(event)}>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
@@ -592,8 +594,8 @@ function FilterGroup<T extends string>({
   onToggle: (value: T) => void;
 }) {
   return (
-    <div className='flex flex-wrap items-center gap-x-3 gap-y-1.5'>
-      <p className='min-w-16 text-xs text-stone-600'>{label}</p>
+    <div className='flex flex-wrap items-center gap-x-2 gap-y-1.5'>
+      <p className='min-w-fit text-xs text-stone-600'>{label}</p>
       {options.map((option) => (
         <label
           key={option.value}

@@ -1,16 +1,22 @@
 'use client';
 
-import { type FormEventHandler, useState } from 'react';
+import { type FormEventHandler, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-
-const SIMPLE_ADMIN_PASSWORD = '0610';
+import { isAdminLoggedIn, setAdminLoggedIn, SIMPLE_ADMIN_PASSWORD } from '@/lib/admin-auth';
 
 export function AdminLoginForm() {
   const router = useRouter();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isAdminLoggedIn()) {
+      return;
+    }
+
+    router.replace('/admin');
+  }, [router]);
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
@@ -21,8 +27,8 @@ export function AdminLoginForm() {
     }
 
     setError('');
+    setAdminLoggedIn();
     router.replace('/admin');
-    router.refresh();
   };
 
   return (

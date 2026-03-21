@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 
@@ -12,6 +12,7 @@ import {
 } from "@/schemas/rsvp";
 import { RSVP_DRAFT_STORAGE_KEY } from "@/lib/rsvp-draft";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const fieldClassName =
   "mt-2 w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 outline-none transition focus:border-rose-400 focus:ring-4 focus:ring-rose-100";
@@ -166,12 +167,27 @@ export function RsvpForm() {
 
       {attending === "yes" ? (
         <Field label="吃素需求" error={errors.vegetarian?.message}>
-          <select className={fieldClassName} suppressHydrationWarning {...register("vegetarian")}>
-            <option value="none">無</option>
-            <option value="vegetarian">蛋奶素</option>
-            <option value="vegan">全素</option>
-            <option value="other">其他需求</option>
-          </select>
+          <Controller
+            control={control}
+            name="vegetarian"
+            render={({ field }) => (
+              <Select
+                value={field.value ?? undefined}
+                onValueChange={field.onChange}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger suppressHydrationWarning>
+                  <SelectValue placeholder="請選擇吃素需求" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">無</SelectItem>
+                  <SelectItem value="vegetarian">蛋奶素</SelectItem>
+                  <SelectItem value="vegan">全素</SelectItem>
+                  <SelectItem value="other">其他需求</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
         </Field>
       ) : null}
 
