@@ -50,6 +50,8 @@ export async function POST(request: Request) {
       seatAssigned: false,
       seatOrder: null,
       seatPosition: null,
+      seatingTableCount: null,
+      seatingTablePositions: null,
     });
 
     return NextResponse.json({
@@ -68,6 +70,8 @@ export async function POST(request: Request) {
         seatAssigned: false,
         seatOrder: null,
         seatPosition: null,
+        seatingTableCount: null,
+        seatingTablePositions: null,
         createdAt: new Date().toISOString(),
       },
     });

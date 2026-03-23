@@ -43,6 +43,11 @@ type SeatingAssignmentPayload = {
   seatPosition: string;
 };
 
+type SeatingLayoutPayload = {
+  tableCount: number;
+  tablePositions: Array<{ x: number; y: number }>;
+};
+
 export function AdminDashboard({
   records,
   usingMockData,
@@ -188,6 +193,8 @@ export function AdminDashboard({
           seatAssigned: false,
           seatOrder: null,
           seatPosition: null,
+          seatingTableCount: null,
+          seatingTablePositions: null,
           createdAt: new Date().toISOString(),
         };
         setLocalRecords((prev) => [createdRecord, ...prev]);
@@ -235,7 +242,10 @@ export function AdminDashboard({
     }
   }
 
-  async function handleSaveSeating(assignments: SeatingAssignmentPayload[]) {
+  async function handleSaveSeating(
+    assignments: SeatingAssignmentPayload[],
+    seatingLayout: SeatingLayoutPayload,
+  ) {
     if (usingMockData) {
       const assignmentMap = new Map(assignments.map((item) => [item.id, item]));
       setLocalRecords((prev) =>
@@ -247,6 +257,8 @@ export function AdminDashboard({
               seatAssigned: true,
               seatOrder: assignment.seatOrder,
               seatPosition: assignment.seatPosition,
+              seatingTableCount: seatingLayout.tableCount,
+              seatingTablePositions: seatingLayout.tablePositions,
             };
           }
 
@@ -255,6 +267,8 @@ export function AdminDashboard({
             seatAssigned: false,
             seatOrder: null,
             seatPosition: null,
+            seatingTableCount: seatingLayout.tableCount,
+            seatingTablePositions: seatingLayout.tablePositions,
           };
         }),
       );
@@ -264,7 +278,11 @@ export function AdminDashboard({
     const response = await fetch('/api/rsvp/seating', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assignments }),
+      body: JSON.stringify({
+        assignments,
+        tableCount: seatingLayout.tableCount,
+        tablePositions: seatingLayout.tablePositions,
+      }),
     });
     const payload = (await response.json().catch(() => null)) as { message?: string } | null;
 
@@ -282,6 +300,8 @@ export function AdminDashboard({
             seatAssigned: true,
             seatOrder: assignment.seatOrder,
             seatPosition: assignment.seatPosition,
+            seatingTableCount: seatingLayout.tableCount,
+            seatingTablePositions: seatingLayout.tablePositions,
           };
         }
 
@@ -290,6 +310,8 @@ export function AdminDashboard({
           seatAssigned: false,
           seatOrder: null,
           seatPosition: null,
+          seatingTableCount: seatingLayout.tableCount,
+          seatingTablePositions: seatingLayout.tablePositions,
         };
       }),
     );

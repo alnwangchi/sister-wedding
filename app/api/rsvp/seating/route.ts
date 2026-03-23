@@ -10,9 +10,34 @@ const seatAssignmentSchema = z.object({
   seatPosition: z.string().trim().min(1, "座位位置不可為空"),
 });
 
+const tablePositionSchema = z.object({
+  x: z.number().finite("桌位 X 座標格式錯誤"),
+  y: z.number().finite("桌位 Y 座標格式錯誤"),
+});
+
 const saveSeatingSchema = z.object({
   assignments: z.array(seatAssignmentSchema),
+  tableCount: z.number().int().min(1, "桌數需至少 1 桌"),
+  tablePositions: z.array(tablePositionSchema),
 });
+
+function normalizeTablePositions(
+  tablePositions: Array<{ x: number; y: number }>,
+  tableCount: number,
+) {
+  if (tablePositions.length === tableCount) {
+    return tablePositions;
+  }
+
+  if (tablePositions.length > tableCount) {
+    return tablePositions.slice(0, tableCount);
+  }
+
+  return [
+    ...tablePositions,
+    ...Array.from({ length: tableCount - tablePositions.length }, () => ({ x: 0, y: 0 })),
+  ];
+}
 
 export async function PUT(request: Request) {
   try {
@@ -37,7 +62,10 @@ export async function PUT(request: Request) {
       );
     }
 
-    await saveSeatingAssignments(parsed.data.assignments);
+    await saveSeatingAssignments(parsed.data.assignments, {
+      tableCount: parsed.data.tableCount,
+      tablePositions: normalizeTablePositions(parsed.data.tablePositions, parsed.data.tableCount),
+    });
 
     return NextResponse.json({ message: "success" });
   } catch (error) {

@@ -16,6 +16,8 @@ export type RsvpRecord = {
   seatAssigned: boolean;
   seatOrder: number | null;
   seatPosition: string | null;
+  seatingTableCount: number | null;
+  seatingTablePositions: Array<{ x: number; y: number }> | null;
   createdAt: string;
 };
 

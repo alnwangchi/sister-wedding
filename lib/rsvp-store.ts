@@ -15,6 +15,32 @@ import type { CreateRsvpInput, RsvpRecord } from "@/types/rsvp";
 
 const COLLECTION_NAME = "rsvps";
 
+function parseTablePositions(
+  value: unknown,
+): Array<{ x: number; y: number }> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const parsed = value.flatMap((item) => {
+    if (typeof item !== "object" || item === null) {
+      return [];
+    }
+    const candidate = item as Record<string, unknown>;
+    if (
+      typeof candidate.x === "number" &&
+      Number.isFinite(candidate.x) &&
+      typeof candidate.y === "number" &&
+      Number.isFinite(candidate.y)
+    ) {
+      return [{ x: candidate.x, y: candidate.y }];
+    }
+    return [];
+  });
+
+  return parsed;
+}
+
 export async function createRsvp(input: CreateRsvpInput) {
   const db = getFirebaseDb();
   const payload = {
@@ -52,6 +78,11 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
       seatAssigned: Boolean(data.seatAssigned),
       seatOrder: typeof data.seatOrder === "number" ? data.seatOrder : null,
       seatPosition: typeof data.seatPosition === "string" ? data.seatPosition : null,
+      seatingTableCount:
+        typeof data.seatingTableCount === "number" && Number.isFinite(data.seatingTableCount)
+          ? data.seatingTableCount
+          : null,
+      seatingTablePositions: parseTablePositions(data.seatingTablePositions),
       createdAt,
     };
   });
@@ -64,6 +95,10 @@ export async function deleteRsvp(id: string) {
 
 export async function saveSeatingAssignments(
   assignments: Array<{ id: string; seatOrder: number; seatPosition: string }>,
+  seatingLayout: {
+    tableCount: number;
+    tablePositions: Array<{ x: number; y: number }>;
+  },
 ) {
   const db = getFirebaseDb();
   const snapshot = await getDocs(collection(db, COLLECTION_NAME));
@@ -80,6 +115,8 @@ export async function saveSeatingAssignments(
         seatAssigned: true,
         seatOrder: assignment.seatOrder,
         seatPosition: assignment.seatPosition,
+        seatingTableCount: seatingLayout.tableCount,
+        seatingTablePositions: seatingLayout.tablePositions,
       });
       return;
     }
@@ -94,8 +131,16 @@ export async function saveSeatingAssignments(
         seatAssigned: false,
         seatOrder: null,
         seatPosition: null,
+        seatingTableCount: seatingLayout.tableCount,
+        seatingTablePositions: seatingLayout.tablePositions,
       });
+      return;
     }
+
+    batch.update(snapshotDoc.ref, {
+      seatingTableCount: seatingLayout.tableCount,
+      seatingTablePositions: seatingLayout.tablePositions,
+    });
   });
 
   await batch.commit();
