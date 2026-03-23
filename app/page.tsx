@@ -21,15 +21,15 @@ export default function HomePage() {
               className='h-auto w-full object-cover'
             />
           </div>
-          <p className='text-xs font-semibold uppercase tracking-[0.28em] text-rose-400 sm:text-sm sm:tracking-[0.35em]'>
+          <p className='text-center text-xs font-semibold uppercase tracking-[0.28em] text-rose-400 sm:text-sm sm:tracking-[0.35em]'>
             Wedding Day
           </p>
-          <h1 className='mt-4 text-3xl font-semibold tracking-tight text-stone-800 sm:mt-6 sm:text-5xl lg:text-6xl'>
+          <h1 className='mt-4 text-center text-3xl font-semibold tracking-tight text-stone-800 sm:mt-6 sm:text-5xl lg:text-6xl'>
             朱威𣽆
             <span className='mx-3 text-rose-400'>&</span>
             王姿婷
           </h1>
-          <p className='mt-4 max-w-2xl whitespace-pre-line text-sm leading-7 text-stone-600 sm:mt-6 sm:text-base sm:leading-8 lg:text-lg'>
+          <p className='mt-4 max-w-2xl text-center whitespace-pre-line text-sm leading-7 text-stone-600 sm:mt-6 sm:text-base sm:leading-8 lg:text-lg'>
             在日常的流轉裡，我們決定牽起彼此的手
             {'\n'}
             走向人生的下一段旅程
