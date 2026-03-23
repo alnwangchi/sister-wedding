@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import { motion, type Variants } from "framer-motion";
 
 import {
   rsvpSchema,
@@ -18,7 +19,7 @@ const fieldClassName =
   "mt-2 w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 outline-none transition focus:border-rose-400 focus:ring-4 focus:ring-rose-100";
 
 const radioClassName =
-  "flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300";
+  "flex cursor-pointer items-start gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300 [&>input]:mt-0.5 [&>input]:shrink-0";
 
 const defaultValues: RsvpFormInput = {
   name: "",
@@ -31,6 +32,32 @@ const defaultValues: RsvpFormInput = {
   relationshipTag: "friend",
   message: "",
 };
+
+const formVariants: Variants = {
+  hidden: {},
+  show: {
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.05,
+    },
+  },
+};
+
+const fieldVariants: Variants = {
+  hidden: {
+    opacity: 0,
+    y: -20,
+  },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  },
+};
+
 export function RsvpForm() {
   const router = useRouter();
   const [submitState, setSubmitState] = useState<{
@@ -110,7 +137,14 @@ export function RsvpForm() {
   });
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3" suppressHydrationWarning>
+    <motion.form
+      onSubmit={onSubmit}
+      className="space-y-3"
+      suppressHydrationWarning
+      variants={formVariants}
+      initial="hidden"
+      animate="show"
+    >
       <Field label="姓名" error={errors.name?.message}>
         <input
           className={fieldClassName}
@@ -134,11 +168,11 @@ export function RsvpForm() {
         <div className="mt-1 grid grid-cols-2 gap-3">
           <label className={radioClassName}>
             <input type="radio" value="yes" suppressHydrationWarning {...register("attending")} />
-            會參加
+            <span className="whitespace-normal break-words leading-5">會參加</span>
           </label>
           <label className={radioClassName}>
             <input type="radio" value="no" suppressHydrationWarning {...register("attending")} />
-            無法參加
+            <span className="whitespace-normal break-words leading-5">無法參加</span>
           </label>
         </div>
       </Field>
@@ -196,17 +230,17 @@ export function RsvpForm() {
         <div className="mt-1 grid grid-cols-2 gap-3">
           <label className={radioClassName}>
             <input type="radio" value="groom" suppressHydrationWarning {...register("side")} />
-            男方親友
+            <span className="whitespace-normal break-words leading-5">男方親友</span>
           </label>
           <label className={radioClassName}>
             <input type="radio" value="bride" suppressHydrationWarning {...register("side")} />
-            女方親友
+            <span className="whitespace-normal break-words leading-5">女方親友</span>
           </label>
         </div>
       </Field>
 
       <Field label="關係標籤" error={errors.relationshipTag?.message}>
-        <div className="mt-1 grid grid-cols-3 gap-3">
+        <div className="mt-1 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <label className={radioClassName}>
             <input
               type="radio"
@@ -214,7 +248,7 @@ export function RsvpForm() {
               suppressHydrationWarning
               {...register("relationshipTag")}
             />
-            同學
+            <span className="whitespace-normal break-words leading-5">同學</span>
           </label>
           <label className={radioClassName}>
             <input
@@ -223,7 +257,7 @@ export function RsvpForm() {
               suppressHydrationWarning
               {...register("relationshipTag")}
             />
-            同事
+            <span className="whitespace-normal break-words leading-5">同事</span>
           </label>
           <label className={radioClassName}>
             <input
@@ -232,7 +266,7 @@ export function RsvpForm() {
               suppressHydrationWarning
               {...register("relationshipTag")}
             />
-            朋友
+            <span className="whitespace-normal break-words leading-5">朋友</span>
           </label>
         </div>
       </Field>
@@ -265,7 +299,7 @@ export function RsvpForm() {
       >
         {isSubmitting ? "處理中..." : "前往確認頁"}
       </Button>
-    </form>
+    </motion.form>
   );
 }
 
@@ -279,10 +313,10 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="block">
+    <motion.label className="block" variants={fieldVariants}>
       <span className="text-sm font-semibold text-stone-700">{label}</span>
       {children}
       {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
-    </label>
+    </motion.label>
   );
 }
