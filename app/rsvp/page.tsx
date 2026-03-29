@@ -1,12 +1,7 @@
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
 import { RsvpForm } from '@/components/rsvp-form';
-
-const RsvpFormHeroAnimation = dynamic(
-  () => import('@/components/rsvp-form-hero-animation').then((mod) => mod.RsvpFormHeroAnimation),
-  { ssr: false },
-);
+import { RsvpFormHeroAnimation } from '@/components/rsvp-form-hero-animation';
 
 export default function RsvpPage() {
   return (
