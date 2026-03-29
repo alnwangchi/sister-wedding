@@ -63,6 +63,13 @@ export default function HomePage() {
                 </li>
               ))}
             </ul>
+            <div className='mt-4 rounded-3xl bg-rose-50/80 px-4 py-3 sm:mt-5 sm:px-5 sm:py-4'>
+              <p className='text-sm text-stone-400'>婚禮時間</p>
+              <p className='mt-1 whitespace-pre-line text-sm font-medium leading-7 text-stone-700 sm:text-base sm:leading-8'>
+                證婚16:30入席 16:45 開始{'\n'}
+                晚宴18:00迎賓 18:30開席
+              </p>
+            </div>
           </div>
 
           <div className='rounded-[2rem] border border-rose-100 bg-[linear-gradient(135deg,#fff1f2_0%,#fff8f5_100%)] p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8'>

@@ -11,16 +11,19 @@ type RsvpFiltersPanelProps = {
   selectedRelationshipTags: RelationshipTagFilter[];
   selectedVegetarianStatus: BinaryFilter[];
   selectedAttendingStatus: BinaryFilter[];
+  selectedPaperInvitationStatus: BinaryFilter[];
   onToggleSide: (value: SideFilter) => void;
   onToggleRelationshipTag: (value: RelationshipTagFilter) => void;
   onToggleVegetarianStatus: (value: BinaryFilter) => void;
   onToggleAttendingStatus: (value: BinaryFilter) => void;
+  onTogglePaperInvitationStatus: (value: BinaryFilter) => void;
   onClearFilters: () => void;
   visibleGroups?: {
     side?: boolean;
     vegetarian?: boolean;
     attending?: boolean;
     relationshipTag?: boolean;
+    paperInvitation?: boolean;
   };
 };
 
@@ -29,10 +32,12 @@ export function RsvpFiltersPanel({
   selectedRelationshipTags,
   selectedVegetarianStatus,
   selectedAttendingStatus,
+  selectedPaperInvitationStatus,
   onToggleSide,
   onToggleRelationshipTag,
   onToggleVegetarianStatus,
   onToggleAttendingStatus,
+  onTogglePaperInvitationStatus,
   onClearFilters,
   visibleGroups,
 }: RsvpFiltersPanelProps) {
@@ -41,6 +46,7 @@ export function RsvpFiltersPanel({
     vegetarian: visibleGroups?.vegetarian ?? true,
     attending: visibleGroups?.attending ?? true,
     relationshipTag: visibleGroups?.relationshipTag ?? true,
+    paperInvitation: visibleGroups?.paperInvitation ?? true,
   };
 
   return (
@@ -104,6 +110,18 @@ export function RsvpFiltersPanel({
             ]}
             selectedValues={selectedRelationshipTags}
             onToggle={onToggleRelationshipTag}
+          />
+        ) : null}
+
+        {showGroup.paperInvitation ? (
+          <FilterGroup
+            label='紙本喜帖'
+            options={[
+              { value: 'yes', label: '需要' },
+              { value: 'no', label: '不需要' },
+            ]}
+            selectedValues={selectedPaperInvitationStatus}
+            onToggle={onTogglePaperInvitationStatus}
           />
         ) : null}
       </div>

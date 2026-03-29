@@ -63,6 +63,9 @@ export function AdminDashboard({
   );
   const [selectedVegetarianStatus, setSelectedVegetarianStatus] = useState<BinaryFilter[]>([]);
   const [selectedAttendingStatus, setSelectedAttendingStatus] = useState<BinaryFilter[]>([]);
+  const [selectedPaperInvitationStatus, setSelectedPaperInvitationStatus] = useState<BinaryFilter[]>(
+    [],
+  );
   const [localRecords, setLocalRecords] = useState(records);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDeleteRecord, setPendingDeleteRecord] = useState<RsvpRecord | null>(null);
@@ -101,12 +104,22 @@ export function AdminDashboard({
       const relationshipTagMatched =
         selectedRelationshipTags.length === 0 ||
         selectedRelationshipTags.includes(record.relationshipTag);
+      const paperInvitationMatched =
+        selectedPaperInvitationStatus.length === 0 ||
+        selectedPaperInvitationStatus.includes(record.needsPaperInvitation ? 'yes' : 'no');
 
-      return sideMatched && vegetarianMatched && attendingMatched && relationshipTagMatched;
+      return (
+        sideMatched &&
+        vegetarianMatched &&
+        attendingMatched &&
+        relationshipTagMatched &&
+        paperInvitationMatched
+      );
     });
   }, [
     localRecords,
     selectedAttendingStatus,
+    selectedPaperInvitationStatus,
     selectedRelationshipTags,
     selectedSides,
     selectedVegetarianStatus,
@@ -123,10 +136,19 @@ export function AdminDashboard({
       const relationshipTagMatched =
         selectedRelationshipTags.length === 0 ||
         selectedRelationshipTags.includes(record.relationshipTag);
+      const paperInvitationMatched =
+        selectedPaperInvitationStatus.length === 0 ||
+        selectedPaperInvitationStatus.includes(record.needsPaperInvitation ? 'yes' : 'no');
 
-      return sideMatched && vegetarianMatched && relationshipTagMatched;
+      return sideMatched && vegetarianMatched && relationshipTagMatched && paperInvitationMatched;
     });
-  }, [localRecords, selectedRelationshipTags, selectedSides, selectedVegetarianStatus]);
+  }, [
+    localRecords,
+    selectedPaperInvitationStatus,
+    selectedRelationshipTags,
+    selectedSides,
+    selectedVegetarianStatus,
+  ]);
 
   const filteredGuestIdsForSeating = useMemo(
     () => filteredRecordsForSeating.map((record) => record.id),
@@ -189,6 +211,8 @@ export function AdminDashboard({
           vegetarian: newGuestVegetarian ? 'vegetarian' : 'none',
           side: newGuestSide,
           relationshipTag: newGuestRelationshipTag,
+          needsPaperInvitation: false,
+          mailingAddress: '',
           message: '',
           seatAssigned: false,
           seatOrder: null,
@@ -340,6 +364,7 @@ export function AdminDashboard({
     setSelectedRelationshipTags([]);
     setSelectedVegetarianStatus([]);
     setSelectedAttendingStatus([]);
+    setSelectedPaperInvitationStatus([]);
   };
 
   return (
@@ -403,6 +428,7 @@ export function AdminDashboard({
                 selectedRelationshipTags={selectedRelationshipTags}
                 selectedVegetarianStatus={selectedVegetarianStatus}
                 selectedAttendingStatus={selectedAttendingStatus}
+                selectedPaperInvitationStatus={selectedPaperInvitationStatus}
                 onToggleSide={(value) => {
                   setCurrentPage(1);
                   toggleMultiSelect(value, setSelectedSides);
@@ -418,6 +444,10 @@ export function AdminDashboard({
                 onToggleAttendingStatus={(value) => {
                   setCurrentPage(1);
                   toggleMultiSelect(value, setSelectedAttendingStatus);
+                }}
+                onTogglePaperInvitationStatus={(value) => {
+                  setCurrentPage(1);
+                  toggleMultiSelect(value, setSelectedPaperInvitationStatus);
                 }}
                 onClearFilters={clearFilters}
               />
@@ -441,6 +471,8 @@ export function AdminDashboard({
                       <TableHead>吃素需求</TableHead>
                       <TableHead>親友別</TableHead>
                       <TableHead>關係標籤</TableHead>
+                      <TableHead>紙本喜帖</TableHead>
+                      <TableHead className='min-w-[12rem]'>收件地址</TableHead>
                       <TableHead>座位安排</TableHead>
                       <TableHead className='min-w-[16rem]'>留言</TableHead>
                       <TableHead className='w-20 text-center'>刪除</TableHead>
@@ -489,6 +521,8 @@ export function AdminDashboard({
                             {relationshipTagLabel[record.relationshipTag]}
                           </Badge>
                         </TableCell>
+                        <TableCell>{record.needsPaperInvitation ? '需要' : '不需要'}</TableCell>
+                        <TableCell>{record.needsPaperInvitation ? record.mailingAddress || '—' : '—'}</TableCell>
                         <TableCell>
                           {record.attending
                             ? record.seatAssigned
@@ -563,6 +597,7 @@ export function AdminDashboard({
               selectedRelationshipTags={selectedRelationshipTags}
               selectedVegetarianStatus={selectedVegetarianStatus}
               selectedAttendingStatus={selectedAttendingStatus}
+              selectedPaperInvitationStatus={selectedPaperInvitationStatus}
               onToggleSide={(value) => {
                 setCurrentPage(1);
                 toggleMultiSelect(value, setSelectedSides);
@@ -578,6 +613,10 @@ export function AdminDashboard({
               onToggleAttendingStatus={(value) => {
                 setCurrentPage(1);
                 toggleMultiSelect(value, setSelectedAttendingStatus);
+              }}
+              onTogglePaperInvitationStatus={(value) => {
+                setCurrentPage(1);
+                toggleMultiSelect(value, setSelectedPaperInvitationStatus);
               }}
               onClearFilters={clearFilters}
               visibleGroups={{ attending: false }}

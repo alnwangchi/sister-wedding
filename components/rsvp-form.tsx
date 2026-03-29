@@ -30,6 +30,8 @@ const defaultValues: RsvpFormInput = {
   vegetarian: "none",
   side: "groom",
   relationshipTag: "friend",
+  needsPaperInvitation: "no",
+  mailingAddress: "",
   message: "",
 };
 
@@ -84,6 +86,10 @@ export function RsvpForm() {
     control,
     name: "attending",
   });
+  const needsPaperInvitation = useWatch({
+    control,
+    name: "needsPaperInvitation",
+  });
   const previousAttending = useRef<RsvpFormInput["attending"] | null>(null);
 
   useEffect(() => {
@@ -118,10 +124,17 @@ export function RsvpForm() {
     previousAttending.current = attending;
   }, [attending, setValue]);
 
+  useEffect(() => {
+    if (needsPaperInvitation === "no") {
+      setValue("mailingAddress", "", { shouldValidate: true });
+    }
+  }, [needsPaperInvitation, setValue]);
+
   const onSubmit = handleSubmit(async (values) => {
     const payload: RsvpFormValues = {
       ...values,
       vegetarian: values.attending === "no" ? null : values.vegetarian,
+      mailingAddress: values.needsPaperInvitation === "yes" ? values.mailingAddress : "",
     };
     setSubmitState({ status: "idle", message: "" });
 
@@ -270,6 +283,40 @@ export function RsvpForm() {
           </label>
         </div>
       </Field>
+
+      <Field label="是否需要紙本喜帖" error={errors.needsPaperInvitation?.message}>
+        <div className="mt-1 grid grid-cols-2 gap-3">
+          <label className={radioClassName}>
+            <input
+              type="radio"
+              value="yes"
+              suppressHydrationWarning
+              {...register("needsPaperInvitation")}
+            />
+            <span className="whitespace-normal break-words leading-5">需要</span>
+          </label>
+          <label className={radioClassName}>
+            <input
+              type="radio"
+              value="no"
+              suppressHydrationWarning
+              {...register("needsPaperInvitation")}
+            />
+            <span className="whitespace-normal break-words leading-5">不需要</span>
+          </label>
+        </div>
+      </Field>
+
+      {needsPaperInvitation === "yes" ? (
+        <Field label="收件地址" error={errors.mailingAddress?.message}>
+          <textarea
+            className={`${fieldClassName} min-h-24 resize-y`}
+            placeholder="請輸入可收件地址"
+            suppressHydrationWarning
+            {...register("mailingAddress")}
+          />
+        </Field>
+      ) : null}
 
       <Field label="想說的話" error={errors.message?.message}>
         <textarea

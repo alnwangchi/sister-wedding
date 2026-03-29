@@ -24,6 +24,12 @@ export const rsvpSchema = z
     relationshipTag: z.enum(['classmate', 'colleague', 'friend'], {
       error: '請選擇關係標籤',
     }),
+    needsPaperInvitation: z
+      .enum(['yes', 'no'], {
+        error: '請選擇是否需要紙本喜帖',
+      })
+      .default('no'),
+    mailingAddress: z.string().trim().max(120, '收件地址請控制在 120 字內').default(''),
     message: z.string().trim().max(300, '想說的話請控制在 300 字內').default(''),
   })
   .superRefine((data, ctx) => {
@@ -56,6 +62,22 @@ export const rsvpSchema = z
         code: 'custom',
         path: ['vegetarian'],
         message: '若不出席，吃素需求請留空',
+      });
+    }
+
+    if (data.needsPaperInvitation === 'yes' && data.mailingAddress.length < 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['mailingAddress'],
+        message: '若需要紙本喜帖，請填寫收件地址',
+      });
+    }
+
+    if (data.needsPaperInvitation === 'no' && data.mailingAddress.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['mailingAddress'],
+        message: '若不需要紙本喜帖，收件地址請留空',
       });
     }
   });

@@ -12,6 +12,8 @@ export type RsvpRecord = {
   vegetarian: VegetarianOption | null;
   side: AttendanceSide;
   relationshipTag: RelationshipTag;
+  needsPaperInvitation: boolean;
+  mailingAddress: string;
   message: string;
   seatAssigned: boolean;
   seatOrder: number | null;

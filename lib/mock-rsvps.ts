@@ -15,6 +15,7 @@ export const mockRsvps: RsvpRecord[] = Array.from({ length: 30 }, (_, index) => 
   const number = index + 1;
   const attending = index % 6 !== 0;
   const guestCount = attending ? (index % 3) + 1 : 0;
+  const needsPaperInvitation = index % 4 === 0;
 
   return {
     id: `mock-${number}`,
@@ -26,6 +27,8 @@ export const mockRsvps: RsvpRecord[] = Array.from({ length: 30 }, (_, index) => 
     vegetarian: attending ? (["none", "vegetarian", "vegan", "other"] as const)[index % 4] : null,
     side: index % 2 === 0 ? "groom" : "bride",
     relationshipTag: (["classmate", "colleague", "friend"] as const)[index % 3],
+    needsPaperInvitation,
+    mailingAddress: needsPaperInvitation ? `台北市信義區松仁路 ${number} 號 ${number} 樓` : "",
     message: attending ? messages[index % messages.length] : "當天另有行程，但先送上祝福。",
     seatAssigned: attending && index % 5 === 0,
     seatOrder: attending && index % 5 === 0 ? ((index % 10) + 1) : null,
