@@ -40,7 +40,7 @@ export default function HomePage() {
           <div className='mt-7 flex sm:mt-10'>
             <Link
               href='/rsvp'
-              className='inline-flex w-full items-center justify-center rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-rose-600 sm:w-auto'
+              className='inline-flex w-full items-center justify-center rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-rose-600 w-full'
             >
               立即填寫回覆
             </Link>
@@ -81,6 +81,27 @@ export default function HomePage() {
               {'\n\n'}
               謝謝你，出現在我們重要的時刻
             </p>
+          </div>
+
+          <div className='rounded-[2rem] border border-rose-100 bg-white/80 p-5 shadow-sm backdrop-blur sm:rounded-[2.5rem] sm:p-8'>
+            <div className='flex items-center justify-between gap-4'>
+              <p className='text-sm font-semibold text-rose-500'>停車卡預覽</p>
+              <a
+                href='/api/parking-card'
+                target='_blank'
+                rel='noreferrer'
+                className='text-xs font-medium text-rose-500 transition hover:text-rose-600'
+              >
+                開啟完整檔案
+              </a>
+            </div>
+            <div className='mt-4 overflow-hidden rounded-2xl border border-rose-100 bg-white'>
+              <iframe
+                src='/api/parking-card'
+                title='婚禮停車卡 PDF 預覽'
+                className='h-[420px] w-full'
+              />
+            </div>
           </div>
         </div>
       </section>
