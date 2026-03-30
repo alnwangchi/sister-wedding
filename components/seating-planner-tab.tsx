@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
 import { Minus, Plus, ZoomIn, ZoomOut } from 'lucide-react';
@@ -52,7 +51,7 @@ const CELL = TABLE_WIDTH + TABLE_GAP;
 const MAX_TABLE_COUNT = 100;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 1.8;
-const DEFAULT_ZOOM = 0.5;
+const DEFAULT_ZOOM = MIN_ZOOM;
 const FIXED_CANVAS_WIDTH = 3900;
 const FIXED_CANVAS_HEIGHT = 1800;
 const SEATING_LAYOUT_STORAGE_KEY = 'wedding-rsvp-seating-layout';
@@ -62,14 +61,6 @@ const SEATING_LAYOUT_STORAGE_KEY = 'wedding-rsvp-seating-layout';
 type TablePosition = {
   x: number;
   y: number;
-};
-
-type DraggingTableState = {
-  tableIndex: number;
-  startClientX: number;
-  startClientY: number;
-  originX: number;
-  originY: number;
 };
 
 type SeatingPlannerTabProps = {
@@ -120,7 +111,7 @@ const PRESET_POSITIONS: TablePosition[] = [
   { x: 3 * CELL, y: 3 * CELL },
 
   // Right block – Row 0
-  { x: 5 * CELL, y: 0 * CELL },
+  { x: 7 * CELL, y: 3 * CELL },
   { x: 6 * CELL, y: 0 * CELL },
   { x: 7 * CELL, y: 0 * CELL },
   { x: 8 * CELL, y: 0 * CELL },
@@ -137,11 +128,11 @@ const PRESET_POSITIONS: TablePosition[] = [
   // Right block – Row 3
   { x: 5 * CELL, y: 3 * CELL },
   { x: 6 * CELL, y: 3 * CELL },
-  { x: 7 * CELL, y: 3 * CELL },
+  { x: 5 * CELL, y: 0 * CELL },
   { x: 8 * CELL, y: 3 * CELL },
 ];
 
-const DEFAULT_TABLE_COUNT = PRESET_POSITIONS.length;
+const DEFAULT_TABLE_COUNT = 28;
 
 // ─── Utility functions ───────────────────────────────────────
 
@@ -375,7 +366,6 @@ export function SeatingPlannerTab({
   const [tablePositions, setTablePositions] = useState<TablePosition[]>(
     () => initialSavedLayout.tablePositions,
   );
-  const [draggingTable, setDraggingTable] = useState<DraggingTableState | null>(null);
   const [seatAssignments, setSeatAssignments] = useState<Array<string | null>>(
     () => initialSavedAssignments,
   );
@@ -433,40 +423,6 @@ export function SeatingPlannerTab({
     setTablePositions((prev) => resizeTablePositions(prev, tableCount));
   }, [tableCount]);
 
-  // ── Table dragging (repositioning on canvas) ──
-
-  useEffect(() => {
-    if (!draggingTable) return;
-    const cd = draggingTable;
-
-    function onMove(event: MouseEvent) {
-      const scale = transformRef.current?.instance.transformState.scale ?? 1;
-      const dx = (event.clientX - cd.startClientX) / scale;
-      const dy = (event.clientY - cd.startClientY) / scale;
-      setTablePositions((prev) =>
-        prev.map((pos, i) =>
-          i === cd.tableIndex
-            ? clampTablePosition({
-                x: Math.round(cd.originX + dx),
-                y: Math.round(cd.originY + dy),
-              })
-            : pos,
-        ),
-      );
-    }
-
-    function onUp() {
-      setDraggingTable(null);
-    }
-
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, [draggingTable]);
-
   // ── Derived values ──
 
   const assignedGuestIds = useMemo(
@@ -493,22 +449,8 @@ export function SeatingPlannerTab({
     if (seatAssignments.length !== lastSavedSeatAssignments.length) return true;
     return seatAssignments.some((id, i) => id !== lastSavedSeatAssignments[i]);
   }, [lastSavedSeatAssignments, seatAssignments]);
-  const isDraggingTable = draggingTable !== null;
 
   // ── Handlers ──
-
-  function handleTableMouseDown(event: ReactMouseEvent<HTMLDivElement>, tableIndex: number) {
-    event.preventDefault();
-    event.stopPropagation();
-    const pos = tablePositions[tableIndex] ?? getDefaultTablePosition(tableIndex);
-    setDraggingTable({
-      tableIndex,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      originX: pos.x,
-      originY: pos.y,
-    });
-  }
 
   function clearSeat(seatIndex: number) {
     setSeatAssignments((prev) => {
@@ -795,7 +737,7 @@ export function SeatingPlannerTab({
               minScale={MIN_ZOOM}
               maxScale={MAX_ZOOM}
               centerOnInit
-              disabled={!!activeDragGuestId || isDraggingTable}
+              disabled={!!activeDragGuestId}
               onTransformed={handleTransformed}
               wheel={{ smoothStep: 0.05 }}
             >
@@ -816,16 +758,11 @@ export function SeatingPlannerTab({
                       <div key={tableNumber}>
                         {/* Table circle */}
                         <div
-                          className={`absolute h-48 w-48 rounded-full border-4 border-rose-200 bg-rose-50 shadow-inner ${
-                            isDraggingTable && draggingTable?.tableIndex === tableIndex
-                              ? 'cursor-grabbing border-rose-300'
-                              : 'cursor-grab'
-                          }`}
+                          className='absolute h-48 w-48 rounded-full border-4 border-rose-200 bg-rose-50 shadow-inner'
                           style={{
                             left: tablePosition.x + TABLE_CENTER - 96,
                             top: tablePosition.y + TABLE_CENTER - 96,
                           }}
-                          onMouseDown={(e) => handleTableMouseDown(e, tableIndex)}
                         >
                           <div className='flex h-full w-full items-center justify-center text-sm font-semibold text-stone-500'>
                             第 {tableNumber} 桌
