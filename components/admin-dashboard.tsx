@@ -211,6 +211,7 @@ export function AdminDashboard({
           vegetarian: newGuestVegetarian ? 'vegetarian' : 'none',
           side: newGuestSide,
           relationshipTag: newGuestRelationshipTag,
+          isSingle: false,
           needsPaperInvitation: false,
           mailingAddress: '',
           message: '',
@@ -471,6 +472,7 @@ export function AdminDashboard({
                       <TableHead>吃素需求</TableHead>
                       <TableHead>親友別</TableHead>
                       <TableHead>關係標籤</TableHead>
+                      <TableHead>是否單身</TableHead>
                       <TableHead>紙本喜帖</TableHead>
                       <TableHead className='min-w-[12rem]'>收件地址</TableHead>
                       <TableHead>座位安排</TableHead>
@@ -521,6 +523,7 @@ export function AdminDashboard({
                             {relationshipTagLabel[record.relationshipTag]}
                           </Badge>
                         </TableCell>
+                        <TableCell>{record.isSingle ? '是' : '否'}</TableCell>
                         <TableCell>{record.needsPaperInvitation ? '需要' : '不需要'}</TableCell>
                         <TableCell>{record.needsPaperInvitation ? record.mailingAddress || '—' : '—'}</TableCell>
                         <TableCell>

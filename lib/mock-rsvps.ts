@@ -27,6 +27,7 @@ export const mockRsvps: RsvpRecord[] = Array.from({ length: 30 }, (_, index) => 
     vegetarian: attending ? (["none", "vegetarian", "vegan", "other"] as const)[index % 4] : null,
     side: index % 2 === 0 ? "groom" : "bride",
     relationshipTag: (["classmate", "colleague", "friend"] as const)[index % 3],
+    isSingle: index % 2 === 0,
     needsPaperInvitation,
     mailingAddress: needsPaperInvitation ? `台北市信義區松仁路 ${number} 號 ${number} 樓` : "",
     message: attending ? messages[index % messages.length] : "當天另有行程，但先送上祝福。",

@@ -33,6 +33,11 @@ const relationshipTagLabels = {
   friend: "朋友",
 } as const;
 
+const singleStatusLabels = {
+  yes: "是",
+  no: "否",
+} as const;
+
 const paperInvitationLabels = {
   yes: "需要",
   no: "不需要",
@@ -153,6 +158,7 @@ export function RsvpConfirmation() {
           />
           <Field label="男方或女方親友" value={sideLabels[draft.side]} />
           <Field label="關係標籤" value={relationshipTagLabels[draft.relationshipTag]} />
+          <Field label="是否單身" value={singleStatusLabels[draft.isSingle]} />
           <Field label="是否需要紙本喜帖" value={paperInvitationLabels[draft.needsPaperInvitation]} />
           <Field
             label="收件地址"

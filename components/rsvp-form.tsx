@@ -30,6 +30,7 @@ const defaultValues: RsvpFormInput = {
   vegetarian: "none",
   side: "groom",
   relationshipTag: "friend",
+  isSingle: "yes",
   needsPaperInvitation: "no",
   mailingAddress: "",
   message: "",
@@ -280,6 +281,19 @@ export function RsvpForm() {
               {...register("relationshipTag")}
             />
             <span className="whitespace-normal break-words leading-5">朋友</span>
+          </label>
+        </div>
+      </Field>
+
+      <Field label="是否單身" error={errors.isSingle?.message}>
+        <div className="mt-1 grid grid-cols-2 gap-3">
+          <label className={radioClassName}>
+            <input type="radio" value="yes" suppressHydrationWarning {...register("isSingle")} />
+            <span className="whitespace-normal break-words leading-5">是</span>
+          </label>
+          <label className={radioClassName}>
+            <input type="radio" value="no" suppressHydrationWarning {...register("isSingle")} />
+            <span className="whitespace-normal break-words leading-5">否</span>
           </label>
         </div>
       </Field>
