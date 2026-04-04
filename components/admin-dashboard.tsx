@@ -80,7 +80,21 @@ type SeatingAssignmentPayload = {
 type SeatingLayoutPayload = {
   tableCount: number;
   tablePositions: Array<{ x: number; y: number }>;
+  tableNames: string[];
 };
+
+function groupSeatingAssignmentsByGuestId(assignments: SeatingAssignmentPayload[]) {
+  const map = new Map<string, SeatingAssignmentPayload[]>();
+  for (const item of assignments) {
+    const list = map.get(item.id) ?? [];
+    list.push(item);
+    map.set(item.id, list);
+  }
+  for (const list of map.values()) {
+    list.sort((a, b) => a.seatOrder - b.seatOrder);
+  }
+  return map;
+}
 
 export function AdminDashboard({
   records,
@@ -268,8 +282,10 @@ export function AdminDashboard({
           seatAssigned: false,
           seatOrder: null,
           seatPosition: null,
+          seatSlots: null,
           seatingTableCount: null,
           seatingTablePositions: null,
+          seatingTableNames: null,
           createdAt: new Date().toISOString(),
         };
         setLocalRecords((prev) => [createdRecord, ...prev]);
@@ -322,18 +338,24 @@ export function AdminDashboard({
     seatingLayout: SeatingLayoutPayload,
   ) {
     if (usingMockData) {
-      const assignmentMap = new Map(assignments.map((item) => [item.id, item]));
+      const slotsByGuest = groupSeatingAssignmentsByGuestId(assignments);
       setLocalRecords((prev) =>
         prev.map((record) => {
-          const assignment = assignmentMap.get(record.id);
-          if (assignment && record.attending) {
+          const slots = slotsByGuest.get(record.id);
+          if (slots && slots.length > 0 && record.attending) {
+            const first = slots[0]!;
             return {
               ...record,
               seatAssigned: true,
-              seatOrder: assignment.seatOrder,
-              seatPosition: assignment.seatPosition,
+              seatOrder: first.seatOrder,
+              seatPosition: first.seatPosition,
+              seatSlots: slots.map((s) => ({
+                seatOrder: s.seatOrder,
+                seatPosition: s.seatPosition,
+              })),
               seatingTableCount: seatingLayout.tableCount,
               seatingTablePositions: seatingLayout.tablePositions,
+              seatingTableNames: seatingLayout.tableNames,
             };
           }
 
@@ -342,8 +364,10 @@ export function AdminDashboard({
             seatAssigned: false,
             seatOrder: null,
             seatPosition: null,
+            seatSlots: null,
             seatingTableCount: seatingLayout.tableCount,
             seatingTablePositions: seatingLayout.tablePositions,
+            seatingTableNames: seatingLayout.tableNames,
           };
         }),
       );
@@ -357,6 +381,7 @@ export function AdminDashboard({
         assignments,
         tableCount: seatingLayout.tableCount,
         tablePositions: seatingLayout.tablePositions,
+        tableNames: seatingLayout.tableNames,
       }),
     });
     const payload = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -365,18 +390,24 @@ export function AdminDashboard({
       throw new Error(payload?.message ?? '儲存座位失敗，請稍後再試。');
     }
 
-    const assignmentMap = new Map(assignments.map((item) => [item.id, item]));
+    const slotsByGuest = groupSeatingAssignmentsByGuestId(assignments);
     setLocalRecords((prev) =>
       prev.map((record) => {
-        const assignment = assignmentMap.get(record.id);
-        if (assignment && record.attending) {
+        const slots = slotsByGuest.get(record.id);
+        if (slots && slots.length > 0 && record.attending) {
+          const first = slots[0]!;
           return {
             ...record,
             seatAssigned: true,
-            seatOrder: assignment.seatOrder,
-            seatPosition: assignment.seatPosition,
+            seatOrder: first.seatOrder,
+            seatPosition: first.seatPosition,
+            seatSlots: slots.map((s) => ({
+              seatOrder: s.seatOrder,
+              seatPosition: s.seatPosition,
+            })),
             seatingTableCount: seatingLayout.tableCount,
             seatingTablePositions: seatingLayout.tablePositions,
+            seatingTableNames: seatingLayout.tableNames,
           };
         }
 
@@ -385,8 +416,10 @@ export function AdminDashboard({
           seatAssigned: false,
           seatOrder: null,
           seatPosition: null,
+          seatSlots: null,
           seatingTableCount: seatingLayout.tableCount,
           seatingTablePositions: seatingLayout.tablePositions,
+          seatingTableNames: seatingLayout.tableNames,
         };
       }),
     );

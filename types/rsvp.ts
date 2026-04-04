@@ -19,8 +19,12 @@ export type RsvpRecord = {
   seatAssigned: boolean;
   seatOrder: number | null;
   seatPosition: string | null;
+  /** 同一筆 RSVP 多個座位時使用；舊資料僅有 seatOrder／seatPosition 單筆 */
+  seatSlots: Array<{ seatOrder: number; seatPosition: string }> | null;
   seatingTableCount: number | null;
   seatingTablePositions: Array<{ x: number; y: number }> | null;
+  /** 與 seatingTableCount 對齊的每桌顯示名稱，存於每筆 RSVP 文件中並保持一致 */
+  seatingTableNames: string[] | null;
   createdAt: string;
 };
 

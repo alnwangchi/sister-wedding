@@ -19,6 +19,7 @@ const saveSeatingSchema = z.object({
   assignments: z.array(seatAssignmentSchema),
   tableCount: z.number().int().min(1, "桌數需至少 1 桌"),
   tablePositions: z.array(tablePositionSchema),
+  tableNames: z.array(z.string().max(40, "單桌名稱上限 40 字")).optional(),
 });
 
 function normalizeTablePositions(
@@ -37,6 +38,31 @@ function normalizeTablePositions(
     ...tablePositions,
     ...Array.from({ length: tableCount - tablePositions.length }, () => ({ x: 0, y: 0 })),
   ];
+}
+
+function normalizeTableNames(
+  tableNames: string[] | undefined,
+  tableCount: number,
+): string[] {
+  const defaults = Array.from({ length: tableCount }, (_, i) => `第 ${i + 1} 桌`);
+  if (!tableNames || tableNames.length === 0) {
+    return defaults;
+  }
+
+  const cleaned = tableNames.map((raw, i) => {
+    const t = typeof raw === "string" ? raw.trim().slice(0, 40) : "";
+    return t.length > 0 ? t : defaults[i] ?? `第 ${i + 1} 桌`;
+  });
+
+  if (cleaned.length === tableCount) {
+    return cleaned;
+  }
+
+  if (cleaned.length > tableCount) {
+    return cleaned.slice(0, tableCount);
+  }
+
+  return [...cleaned, ...defaults.slice(cleaned.length)];
 }
 
 export async function PUT(request: Request) {
@@ -62,9 +88,11 @@ export async function PUT(request: Request) {
       );
     }
 
+    const tableCount = parsed.data.tableCount;
     await saveSeatingAssignments(parsed.data.assignments, {
-      tableCount: parsed.data.tableCount,
-      tablePositions: normalizeTablePositions(parsed.data.tablePositions, parsed.data.tableCount),
+      tableCount,
+      tablePositions: normalizeTablePositions(parsed.data.tablePositions, tableCount),
+      tableNames: normalizeTableNames(parsed.data.tableNames, tableCount),
     });
 
     return NextResponse.json({ message: "success" });

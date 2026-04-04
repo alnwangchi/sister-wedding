@@ -6,9 +6,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type PointerEvent,
   type ReactNode,
 } from 'react';
-import { ZoomIn, ZoomOut } from 'lucide-react';
+import { Pencil, ZoomIn, ZoomOut } from 'lucide-react';
 
 import {
   DndContext,
@@ -52,9 +53,43 @@ const CELL = TABLE_WIDTH + TABLE_GAP;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 1.8;
 const DEFAULT_ZOOM = MIN_ZOOM;
+/** 按鈕縮放步進：程式庫 smooth 模式下為比例 ×1.01 / ÷1.01 */
+const ZOOM_BUTTON_STEP = Math.log(1.01);
+/** 滑輪／觸控板捏合（smooth）：增量為 smoothStep × |deltaY|，0.01 約對應顯示 +1%／單位 delta */
+const WHEEL_ZOOM_SMOOTH_STEP = 0.01;
 const FIXED_CANVAS_WIDTH = 3900;
 const FIXED_CANVAS_HEIGHT = 1800;
+/** 畫布外圈留白（px），放大平移時邊界仍保留可視邊距，避免內容貼死視窗 */
+const CANVAS_PAN_GUTTER = 96;
 const SEATING_LAYOUT_STORAGE_KEY = 'wedding-rsvp-seating-layout';
+
+/** 座位格內儲存「賓客＋同行第幾位」，與可拖曳項 id 一致；舊資料僅存 guestId */
+const SEAT_CELL_SEP = '\u001f';
+
+function makeSeatSlotToken(guestId: string, slotIndex: number): string {
+  return `guest-slot${SEAT_CELL_SEP}${guestId}${SEAT_CELL_SEP}${String(slotIndex)}`;
+}
+
+function tryParseSeatSlotToken(token: string): { guestId: string; slotIndex: number } | null {
+  const parts = token.split(SEAT_CELL_SEP);
+  if (parts.length !== 3 || parts[0] !== 'guest-slot') return null;
+  const slotIndex = parseInt(parts[2]!, 10);
+  if (!Number.isFinite(slotIndex) || slotIndex < 0) return null;
+  return { guestId: parts[1]!, slotIndex };
+}
+
+function parseSeatCell(token: string): { guestId: string; slotIndex: number } {
+  const parsed = tryParseSeatSlotToken(token);
+  if (parsed) return parsed;
+  return { guestId: token, slotIndex: 0 };
+}
+
+function partySeatCount(r: RsvpRecord): number {
+  if (!r.attending) return 0;
+  const n = Math.floor(Number(r.guestCount));
+  if (Number.isFinite(n) && n >= 1) return n;
+  return 1;
+}
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -69,7 +104,7 @@ type SeatingPlannerTabProps = {
   filtersPanel?: ReactNode;
   onSave: (
     assignments: Array<{ id: string; seatOrder: number; seatPosition: string }>,
-    seatingLayout: { tableCount: number; tablePositions: TablePosition[] },
+    seatingLayout: { tableCount: number; tablePositions: TablePosition[]; tableNames: string[] },
   ) => Promise<void>;
 };
 
@@ -168,16 +203,59 @@ function resizeAssignments(assignments: Array<string | null>, totalSeats: number
   return [...assignments, ...Array.from({ length: totalSeats - assignments.length }, () => null)];
 }
 
+function defaultTableNames(): string[] {
+  return Array.from({ length: FIXED_TABLE_COUNT }, (_, i) => `第 ${i + 1} 桌`);
+}
+
+function resizeTableNames(names: string[], tableCount: number): string[] {
+  const defaults = Array.from({ length: tableCount }, (_, i) => `第 ${i + 1} 桌`);
+  if (names.length === tableCount) {
+    return names.map((n, i) => {
+      const t = typeof n === 'string' ? n.trim() : '';
+      return t.length > 0 ? t.slice(0, 40) : defaults[i]!;
+    });
+  }
+  if (names.length > tableCount) {
+    return resizeTableNames(names.slice(0, tableCount), tableCount);
+  }
+  return [
+    ...names.map((n, i) => {
+      const t = typeof n === 'string' ? n.trim() : '';
+      return t.length > 0 ? t.slice(0, 40) : defaults[i]!;
+    }),
+    ...defaults.slice(names.length),
+  ];
+}
+
+function getSavedTableNames(records: RsvpRecord[]): string[] {
+  const source = records.find(
+    (r) => Array.isArray(r.seatingTableNames) && r.seatingTableNames.length > 0,
+  )?.seatingTableNames;
+  if (!source) return defaultTableNames();
+  return resizeTableNames(source as string[], FIXED_TABLE_COUNT);
+}
+
+function normalizeTableNamesForSave(names: string[]): string[] {
+  return resizeTableNames(names, FIXED_TABLE_COUNT);
+}
+
 function getSavedSeatAssignments(records: RsvpRecord[]) {
   const seats = Array.from<string | null>({
     length: FIXED_TABLE_COUNT * TABLE_CAPACITY,
   }).fill(null);
 
   records.forEach((r) => {
-    if (!r.attending || !r.seatAssigned || typeof r.seatOrder !== 'number') return;
-    const idx = r.seatOrder - 1;
-    if (idx < 0 || idx >= seats.length || seats[idx] !== null) return;
-    seats[idx] = r.id;
+    if (!r.attending) return;
+    const slots = r.seatSlots?.length
+      ? [...r.seatSlots].sort((a, b) => a.seatOrder - b.seatOrder)
+      : r.seatAssigned && typeof r.seatOrder === 'number'
+        ? [{ seatOrder: r.seatOrder, seatPosition: r.seatPosition ?? '' }]
+        : [];
+    slots.forEach((slot, slotIdx) => {
+      const idx = slot.seatOrder - 1;
+      if (idx < 0 || idx >= seats.length || seats[idx] !== null) return;
+      seats[idx] = makeSeatSlotToken(r.id, slotIdx);
+    });
   });
 
   return seats;
@@ -209,8 +287,20 @@ function getLocalStoredTableLayout() {
     const raw = window.localStorage.getItem(SEATING_LAYOUT_STORAGE_KEY);
     if (!raw) return null;
 
-    const parsed = JSON.parse(raw) as { tablePositions?: unknown };
+    const parsed = JSON.parse(raw) as { tablePositions?: unknown; tableNames?: unknown };
     if (!Array.isArray(parsed.tablePositions)) return null;
+
+    let tableNames: string[] | undefined;
+    if (Array.isArray(parsed.tableNames)) {
+      const rawNames = parsed.tableNames.flatMap((item: unknown) => {
+        if (typeof item !== 'string') return [];
+        const t = item.trim();
+        return t.length > 0 ? [t.slice(0, 40)] : [];
+      });
+      if (rawNames.length > 0) {
+        tableNames = resizeTableNames(rawNames, FIXED_TABLE_COUNT);
+      }
+    }
 
     const safePositions = parsed.tablePositions.flatMap((p: unknown) => {
       if (typeof p !== 'object' || p === null || !('x' in p) || !('y' in p)) return [];
@@ -227,13 +317,18 @@ function getLocalStoredTableLayout() {
 
     return {
       tablePositions: resizeTablePositions(safePositions, FIXED_TABLE_COUNT),
+      tableNames,
     };
   } catch {
     return null;
   }
 }
 
-function saveTableLayoutToLocalStorage(tableCount: number, tablePositions: TablePosition[]) {
+function saveTableLayoutToLocalStorage(
+  tableCount: number,
+  tablePositions: TablePosition[],
+  tableNames: string[],
+) {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(
@@ -241,6 +336,7 @@ function saveTableLayoutToLocalStorage(tableCount: number, tablePositions: Table
       JSON.stringify({
         tableCount,
         tablePositions: resizeTablePositions(tablePositions, tableCount).map(clampTablePosition),
+        tableNames: normalizeTableNamesForSave(tableNames),
       }),
     );
   } catch {
@@ -250,10 +346,10 @@ function saveTableLayoutToLocalStorage(tableCount: number, tablePositions: Table
 
 // ─── Sub‑components ──────────────────────────────────────────
 
-function DraggableGuest({ guest }: { guest: GuestInfo }) {
+function DraggableGuestSlot({ dragId, label }: { dragId: string; label: string }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `guest-${guest.id}`,
-    data: { guestId: guest.id },
+    id: dragId,
+    data: { label },
   });
 
   return (
@@ -265,7 +361,7 @@ function DraggableGuest({ guest }: { guest: GuestInfo }) {
         isDragging ? 'opacity-40' : ''
       }`}
     >
-      {guest.name}
+      {label}
     </div>
   );
 }
@@ -323,17 +419,13 @@ export function SeatingPlannerTab({
 
   const initialSavedAssignments = useMemo(() => getSavedSeatAssignments(records), [records]);
   const initialSavedLayout = useMemo(() => getSavedTableLayout(records), [records]);
-  const attendingGuests = useMemo(
-    () =>
-      records
-        .filter((r) => r.attending)
-        .map((r) => ({ id: r.id, name: r.name })),
-    [records],
-  );
-  const attendingGuestMap = useMemo(
-    () => new Map(attendingGuests.map((g) => [g.id, g])),
-    [attendingGuests],
-  );
+  const attendingGuestMap = useMemo(() => {
+    const map = new Map<string, GuestInfo>();
+    for (const r of records) {
+      if (r.attending) map.set(r.id, { id: r.id, name: r.name });
+    }
+    return map;
+  }, [records]);
   const filteredGuestIdSet = useMemo(
     () => (filteredGuestIds ? new Set(filteredGuestIds) : null),
     [filteredGuestIds],
@@ -344,18 +436,25 @@ export function SeatingPlannerTab({
   const [tablePositions, setTablePositions] = useState<TablePosition[]>(
     () => initialSavedLayout.tablePositions,
   );
+  const [tableNames, setTableNames] = useState<string[]>(() => getSavedTableNames(records));
+  const [lastSavedTableNames, setLastSavedTableNames] = useState<string[]>(() =>
+    getSavedTableNames(records),
+  );
   const [seatAssignments, setSeatAssignments] = useState<Array<string | null>>(
     () => initialSavedAssignments,
   );
   const [lastSavedSeatAssignments, setLastSavedSeatAssignments] = useState<Array<string | null>>(
     () => initialSavedAssignments,
   );
+  const [renameTableIndex, setRenameTableIndex] = useState<number | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState(DEFAULT_ZOOM);
-  const [activeDragGuestId, setActiveDragGuestId] = useState<string | null>(null);
+  const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
+  const [isCanvasPointerDown, setIsCanvasPointerDown] = useState(false);
 
   // ── Refs ──
 
@@ -369,6 +468,22 @@ export function SeatingPlannerTab({
 
   // ── Effects ──
 
+  const hasUnsavedTableNameChanges = useMemo(
+    () => tableNames.some((n, i) => n !== lastSavedTableNames[i]),
+    [lastSavedTableNames, tableNames],
+  );
+
+  useEffect(() => {
+    if (hasUnsavedTableNameChanges) return;
+    const next = getSavedTableNames(records);
+    const hasServerNames = records.some(
+      (r) => Array.isArray(r.seatingTableNames) && r.seatingTableNames.length > 0,
+    );
+    if (!hasServerNames) return;
+    setTableNames(next);
+    setLastSavedTableNames(next);
+  }, [hasUnsavedTableNameChanges, records]);
+
   useEffect(() => {
     const hasServerLayout = records.some(
       (r) =>
@@ -380,40 +495,96 @@ export function SeatingPlannerTab({
     const localLayout = getLocalStoredTableLayout();
     if (localLayout) {
       setTablePositions(localLayout.tablePositions);
+      if (localLayout.tableNames) {
+        setTableNames(localLayout.tableNames);
+        setLastSavedTableNames(localLayout.tableNames);
+      }
       return;
     }
 
     setTablePositions(resizeTablePositions([...PRESET_POSITIONS], FIXED_TABLE_COUNT));
+    const defaults = defaultTableNames();
+    setTableNames(defaults);
+    setLastSavedTableNames(defaults);
   }, [records]);
 
   useEffect(() => {
-    const validIds = new Set(attendingGuests.map((g) => g.id));
-    setSeatAssignments((prev) => prev.map((id) => (id && validIds.has(id) ? id : null)));
-    setLastSavedSeatAssignments((prev) => prev.map((id) => (id && validIds.has(id) ? id : null)));
-  }, [attendingGuests]);
+    const validIds = new Set(records.filter((r) => r.attending).map((r) => r.id));
+    setSeatAssignments((prev) =>
+      prev.map((token) => {
+        if (!token) return null;
+        const { guestId } = parseSeatCell(token);
+        return validIds.has(guestId) ? token : null;
+      }),
+    );
+    setLastSavedSeatAssignments((prev) =>
+      prev.map((token) => {
+        if (!token) return null;
+        const { guestId } = parseSeatCell(token);
+        return validIds.has(guestId) ? token : null;
+      }),
+    );
+  }, [records]);
+
+  useEffect(() => {
+    if (activeDragLabel) setIsCanvasPointerDown(false);
+  }, [activeDragLabel]);
+
+  useEffect(() => {
+    if (!isCanvasPointerDown) return;
+    const end = () => setIsCanvasPointerDown(false);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, [isCanvasPointerDown]);
 
   // ── Derived values ──
 
-  const assignedGuestIds = useMemo(
-    () => new Set(seatAssignments.filter((id): id is string => id !== null)),
-    [seatAssignments],
-  );
-  const unassignedGuests = useMemo(
-    () =>
-      attendingGuests.filter((g) => {
-        const matchFilter = filteredGuestIdSet ? filteredGuestIdSet.has(g.id) : true;
-        return matchFilter && !assignedGuestIds.has(g.id);
-      }),
-    [assignedGuestIds, attendingGuests, filteredGuestIdSet],
-  );
+  const unassignedPartySlots = useMemo(() => {
+    const tokensInSeats = new Set(seatAssignments.filter((t): t is string => t !== null));
+    const rows: Array<{ dragId: string; label: string }> = [];
+    for (const r of records) {
+      if (!r.attending) continue;
+      const matchFilter = filteredGuestIdSet ? filteredGuestIdSet.has(r.id) : true;
+      if (!matchFilter) continue;
+      const n = partySeatCount(r);
+      for (let i = 0; i < n; i++) {
+        const dragId = makeSeatSlotToken(r.id, i);
+        if (!tokensInSeats.has(dragId)) {
+          rows.push({
+            dragId,
+            label: n > 1 ? `${r.name}（${i + 1}/${n}）` : r.name,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [records, seatAssignments, filteredGuestIdSet]);
 
-  const seatedCount = assignedGuestIds.size;
+  const seatedCount = seatAssignments.filter((t) => t !== null).length;
   const totalSeats = FIXED_TABLE_COUNT * TABLE_CAPACITY;
   const zoomPercent = Math.round(canvasZoom * 100);
+
+  const handleCanvasWrapperPointerDown = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      if (activeDragLabel) return;
+      if (e.button !== 0) return;
+      const { target } = e;
+      if (!(target instanceof Element)) return;
+      if (target.closest('button, a, input, textarea, select, [role="button"]')) return;
+      setIsCanvasPointerDown(true);
+    },
+    [activeDragLabel],
+  );
+
   const hasUnsavedChanges = useMemo(() => {
+    if (hasUnsavedTableNameChanges) return true;
     if (seatAssignments.length !== lastSavedSeatAssignments.length) return true;
     return seatAssignments.some((id, i) => id !== lastSavedSeatAssignments[i]);
-  }, [lastSavedSeatAssignments, seatAssignments]);
+  }, [hasUnsavedTableNameChanges, lastSavedSeatAssignments, seatAssignments]);
 
   // ── Handlers ──
 
@@ -432,11 +603,11 @@ export function SeatingPlannerTab({
   // ── Zoom controls ──
 
   function handleZoomIn() {
-    transformRef.current?.zoomIn(0.2, 200);
+    transformRef.current?.zoomIn(ZOOM_BUTTON_STEP, 200);
   }
 
   function handleZoomOut() {
-    transformRef.current?.zoomOut(0.2, 200);
+    transformRef.current?.zoomOut(ZOOM_BUTTON_STEP, 200);
   }
 
   function handleSliderZoom(newScale: number) {
@@ -468,9 +639,9 @@ export function SeatingPlannerTab({
   // ── dnd-kit handlers ──
 
   function handleDragStart(event: DragStartEvent) {
-    const rawId = String(event.active.id);
-    if (rawId.startsWith('guest-')) {
-      setActiveDragGuestId(rawId.slice('guest-'.length));
+    const data = event.active.data.current as { label?: unknown } | undefined;
+    if (typeof data?.label === 'string') {
+      setActiveDragLabel(data.label);
     }
   }
 
@@ -480,39 +651,44 @@ export function SeatingPlannerTab({
       const overId = String(over.id);
       if (overId.startsWith('seat-')) {
         const seatIndex = parseInt(overId.slice('seat-'.length), 10);
-        const guestId = String(active.id).slice('guest-'.length);
+        const token = String(active.id);
+        const { guestId } = parseSeatCell(token);
         if (!isNaN(seatIndex) && guestId && attendingGuestMap.has(guestId)) {
           setSeatAssignments((prev) => {
-            if (prev[seatIndex] !== null || prev.includes(guestId)) return prev;
+            if (prev[seatIndex] !== null || prev.includes(token)) return prev;
             const next = [...prev];
-            next[seatIndex] = guestId;
+            next[seatIndex] = token;
             return next;
           });
         }
       }
     }
-    setActiveDragGuestId(null);
+    setActiveDragLabel(null);
   }
 
   // ── Save ──
 
-  async function handleSaveSeats() {
+  async function persistSeating(namesForSave: string[]) {
     setIsSaving(true);
     setSaveMessage('');
     setSaveError(false);
 
     try {
-      const assignments = seatAssignments.flatMap((guestId, index) =>
-        guestId
-          ? [
-              {
-                id: guestId,
-                seatOrder: index + 1,
-                seatPosition: `第 ${Math.floor(index / TABLE_CAPACITY) + 1} 桌 - ${((index % TABLE_CAPACITY) + 1).toString()} 號位`,
-              },
-            ]
-          : [],
-      );
+      const normalizedNames = normalizeTableNamesForSave(namesForSave);
+      const assignments = seatAssignments.flatMap((cellToken, index) => {
+        if (!cellToken) return [];
+        const { guestId } = parseSeatCell(cellToken);
+        const tableIndex = Math.floor(index / TABLE_CAPACITY);
+        const seatNum = (index % TABLE_CAPACITY) + 1;
+        const label = normalizedNames[tableIndex] ?? `第 ${tableIndex + 1} 桌`;
+        return [
+          {
+            id: guestId,
+            seatOrder: index + 1,
+            seatPosition: `${label} - ${seatNum} 號位`,
+          },
+        ];
+      });
 
       const normalizedPositions = resizeTablePositions(
         tablePositions,
@@ -521,8 +697,11 @@ export function SeatingPlannerTab({
       await onSave(assignments, {
         tableCount: FIXED_TABLE_COUNT,
         tablePositions: normalizedPositions,
+        tableNames: normalizedNames,
       });
-      saveTableLayoutToLocalStorage(FIXED_TABLE_COUNT, normalizedPositions);
+      saveTableLayoutToLocalStorage(FIXED_TABLE_COUNT, normalizedPositions, normalizedNames);
+      setTableNames(normalizedNames);
+      setLastSavedTableNames(normalizedNames);
       setLastSavedSeatAssignments([...seatAssignments]);
       setSaveMessage('座位安排已儲存。');
     } catch (error) {
@@ -534,7 +713,30 @@ export function SeatingPlannerTab({
     }
   }
 
-  const activeDragGuest = activeDragGuestId ? attendingGuestMap.get(activeDragGuestId) : null;
+  async function handleSaveSeats() {
+    await persistSeating(tableNames);
+  }
+
+  function openRenameTableDialog(tableIndex: number) {
+    setRenameDraft(tableNames[tableIndex] ?? `第 ${tableIndex + 1} 桌`);
+    setRenameTableIndex(tableIndex);
+  }
+
+  function closeRenameTableDialog() {
+    setRenameTableIndex(null);
+    setRenameDraft('');
+  }
+
+  async function confirmRenameTable() {
+    if (renameTableIndex === null) return;
+    const tableIndex = renameTableIndex;
+    const fallback = `第 ${tableIndex + 1} 桌`;
+    const trimmed = renameDraft.trim().slice(0, 40) || fallback;
+    const nextNames = tableNames.map((n, i) => (i === tableIndex ? trimmed : n));
+    setTableNames(nextNames);
+    closeRenameTableDialog();
+    await persistSeating(nextNames);
+  }
 
   // ── Render ──
 
@@ -551,8 +753,9 @@ export function SeatingPlannerTab({
           <div>
             <p className='text-sm font-semibold text-stone-700'>座位安排（多桌畫布）</p>
             <p className='mt-1 text-sm text-stone-500'>
-              先拖拉上方賓客到下方畫布中的桌位，每桌共 {TABLE_CAPACITY} 位，場地固定 {FIXED_TABLE_COUNT}{' '}
-              桌，可調整畫布縮放。
+              先拖拉上方賓客到下方畫布中的桌位；若回覆的參加人數大於 1，清單會出現對應數量的標籤（例如
+              姓名（2/3））以便對齊總人數。每桌共 {TABLE_CAPACITY} 位，場地固定 {FIXED_TABLE_COUNT}{' '}
+              桌；點畫布上筆形圖示可為該桌命名並立即儲存。可調整畫布縮放。
             </p>
           </div>
           <div className='flex items-center gap-2'>
@@ -596,14 +799,14 @@ export function SeatingPlannerTab({
             </p>
           </div>
 
-          {unassignedGuests.length === 0 ? (
+          {unassignedPartySlots.length === 0 ? (
             <p className='mt-3 rounded-2xl bg-white px-3 py-2 text-xs text-stone-500'>
               所有可安排賓客都已放入座位，或目前沒有出席賓客資料。
             </p>
           ) : (
             <div className='mt-3 flex flex-wrap gap-2'>
-              {unassignedGuests.map((guest) => (
-                <DraggableGuest key={guest.id} guest={guest} />
+              {unassignedPartySlots.map((slot) => (
+                <DraggableGuestSlot key={slot.dragId} dragId={slot.dragId} label={slot.label} />
               ))}
             </div>
           )}
@@ -657,17 +860,41 @@ export function SeatingPlannerTab({
               minScale={MIN_ZOOM}
               maxScale={MAX_ZOOM}
               centerOnInit
-              disabled={!!activeDragGuestId}
+              disabled={!!activeDragLabel}
               onTransformed={handleTransformed}
-              wheel={{ smoothStep: 0.05 }}
+              wheel={{ smoothStep: WHEEL_ZOOM_SMOOTH_STEP }}
+              // 預設會在邊界外多給一段可拖曳距離，放開時再動畫對齊，視覺上像回彈
+              disablePadding
+              alignmentAnimation={{ disabled: true }}
+              panning={{ velocityDisabled: true }}
             >
               <TransformComponent
-                wrapperStyle={{ width: '100%', height: '100%' }}
+                wrapperStyle={{
+                  width: '100%',
+                  height: '100%',
+                  ...(activeDragLabel
+                    ? {}
+                    : { cursor: isCanvasPointerDown ? 'grabbing' : 'grab' }),
+                }}
+                wrapperProps={{ onPointerDown: handleCanvasWrapperPointerDown }}
               >
                 <div
-                  className='relative'
-                  style={{ width: FIXED_CANVAS_WIDTH, height: FIXED_CANVAS_HEIGHT }}
+                  className='relative bg-rose-50/30'
+                  style={{
+                    width: FIXED_CANVAS_WIDTH + CANVAS_PAN_GUTTER * 2,
+                    height: FIXED_CANVAS_HEIGHT + CANVAS_PAN_GUTTER * 2,
+                  }}
                 >
+                  <div
+                    className='relative'
+                    style={{
+                      position: 'absolute',
+                      left: CANVAS_PAN_GUTTER,
+                      top: CANVAS_PAN_GUTTER,
+                      width: FIXED_CANVAS_WIDTH,
+                      height: FIXED_CANVAS_HEIGHT,
+                    }}
+                  >
                   {Array.from({ length: FIXED_TABLE_COUNT }, (_, tableIndex) => {
                     const tableNumber = tableIndex + 1;
                     const tablePosition = clampTablePosition(
@@ -684,15 +911,29 @@ export function SeatingPlannerTab({
                             top: tablePosition.y + TABLE_CENTER - 96,
                           }}
                         >
-                          <div className='flex h-full w-full items-center justify-center text-sm font-semibold text-stone-500'>
-                            第 {tableNumber} 桌
+                          <div className='flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-center'>
+                            <span className='line-clamp-2 text-sm font-semibold text-stone-600'>
+                              {tableNames[tableIndex] ?? `第 ${tableNumber} 桌`}
+                            </span>
+                            <Button
+                              type='button'
+                              variant='outline'
+                              size='icon'
+                              className='h-7 w-7 shrink-0 rounded-full border-rose-200 text-stone-600'
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={() => openRenameTableDialog(tableIndex)}
+                              disabled={isSaving}
+                            >
+                              <Pencil aria-hidden='true' className='size-3.5' />
+                              <span className='sr-only'>編輯桌次名稱</span>
+                            </Button>
                           </div>
                         </div>
 
                         {/* Seats around the table */}
                         {Array.from({ length: TABLE_CAPACITY }, (_, seatOffset) => {
                           const seatIndex = tableIndex * TABLE_CAPACITY + seatOffset;
-                          const guestId = seatAssignments[seatIndex];
+                          const cellToken = seatAssignments[seatIndex];
                           const angle =
                             (seatOffset / TABLE_CAPACITY) * Math.PI * 2 - Math.PI / 2;
                           const left =
@@ -705,9 +946,18 @@ export function SeatingPlannerTab({
                             TABLE_CENTER +
                             TABLE_RADIUS * Math.sin(angle) -
                             SEAT_SIZE / 2;
-                          const guest = guestId
-                            ? (attendingGuestMap.get(guestId) ?? null)
+                          const parsed = cellToken ? parseSeatCell(cellToken) : null;
+                          const guest = parsed
+                            ? (attendingGuestMap.get(parsed.guestId) ?? null)
                             : null;
+                          const partyRecord = parsed
+                            ? records.find((x) => x.id === parsed.guestId)
+                            : undefined;
+                          const partyN = partyRecord ? partySeatCount(partyRecord) : 1;
+                          const seatDisplayName =
+                            guest && partyN > 1
+                              ? `${guest.name}（${parsed!.slotIndex + 1}/${partyN}）`
+                              : guest?.name ?? '';
 
                           return (
                             <DroppableSeat
@@ -716,12 +966,12 @@ export function SeatingPlannerTab({
                               left={left}
                               top={top}
                               occupied={!!guest}
-                              isAnyDragging={!!activeDragGuestId}
+                              isAnyDragging={!!activeDragLabel}
                             >
                               {guest ? (
                                 <>
                                   <span className='line-clamp-1 max-w-[52px] font-medium'>
-                                    {guest.name}
+                                    {seatDisplayName}
                                   </span>
                                   <button
                                     type='button'
@@ -740,6 +990,7 @@ export function SeatingPlannerTab({
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               </TransformComponent>
             </TransformWrapper>
@@ -749,12 +1000,51 @@ export function SeatingPlannerTab({
 
       {/* Drag overlay */}
       <DragOverlay dropAnimation={null}>
-        {activeDragGuest ? (
+        {activeDragLabel ? (
           <div className='rounded-full border border-rose-300 bg-rose-100 px-3 py-1.5 text-xs font-medium text-stone-700 shadow-lg'>
-            {activeDragGuest.name}
+            {activeDragLabel}
           </div>
         ) : null}
       </DragOverlay>
+
+      {/* Rename single table */}
+      <Dialog
+        open={renameTableIndex !== null}
+        onOpenChange={(open) => {
+          if (!open) closeRenameTableDialog();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>編輯桌次名稱</DialogTitle>
+            <DialogDescription>
+              名稱會寫入賓客的「座位位置」欄位（例如：主桌 - 3 號位）。按儲存後會一併更新目前座位與畫布配置。
+            </DialogDescription>
+          </DialogHeader>
+          <div className='py-2'>
+            <label htmlFor='rename-table-input' className='sr-only'>
+              桌次名稱
+            </label>
+            <input
+              id='rename-table-input'
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              maxLength={40}
+              disabled={isSaving}
+              className='w-full rounded-xl border border-rose-200 px-3 py-2 text-sm outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-200'
+              placeholder='例如：主桌、男方同事'
+            />
+          </div>
+          <DialogFooter>
+            <Button type='button' variant='outline' onClick={closeRenameTableDialog} disabled={isSaving}>
+              取消
+            </Button>
+            <Button type='button' onClick={() => void confirmRenameTable()} disabled={isSaving}>
+              {isSaving ? '儲存中...' : '儲存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reset dialog */}
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>

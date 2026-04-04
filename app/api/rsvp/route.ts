@@ -43,8 +43,10 @@ export async function POST(request: Request) {
       seatAssigned: false,
       seatOrder: null,
       seatPosition: null,
+      seatSlots: null,
       seatingTableCount: null,
       seatingTablePositions: null,
+      seatingTableNames: null,
     });
 
     return NextResponse.json({ message: "success" });

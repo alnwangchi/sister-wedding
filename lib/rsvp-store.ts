@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -14,6 +15,41 @@ import { getFirebaseDb } from "@/lib/firebase";
 import type { CreateRsvpInput, RsvpRecord } from "@/types/rsvp";
 
 const COLLECTION_NAME = "rsvps";
+const SEATING_META_REF = ["meta", "seating"] as const;
+
+type SeatingLayoutMeta = {
+  tableCount: number;
+  tablePositions: Array<{ x: number; y: number }>;
+  tableNames: string[];
+};
+
+function parseSeatingMetaDoc(data: Record<string, unknown>): SeatingLayoutMeta | null {
+  const tableCount = data.tableCount;
+  if (typeof tableCount !== "number" || !Number.isFinite(tableCount) || tableCount < 1) {
+    return null;
+  }
+
+  const tablePositions = parseTablePositions(data.tablePositions);
+  const tableNames = parseTableNames(data.tableNames);
+  if (!tablePositions || tablePositions.length === 0 || !tableNames || tableNames.length === 0) {
+    return null;
+  }
+
+  return { tableCount, tablePositions, tableNames };
+}
+
+async function fetchSeatingLayoutMeta(): Promise<SeatingLayoutMeta | null> {
+  const db = getFirebaseDb();
+  const snap = await getDoc(doc(db, ...SEATING_META_REF));
+  if (!snap.exists()) {
+    return null;
+  }
+  const raw = snap.data();
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
+  return parseSeatingMetaDoc(raw as Record<string, unknown>);
+}
 
 function parseTablePositions(
   value: unknown,
@@ -41,10 +77,61 @@ function parseTablePositions(
   return parsed;
 }
 
+function parseTableNames(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const parsed = value.flatMap((item) => {
+    if (typeof item !== "string") {
+      return [];
+    }
+    const trimmed = item.trim();
+    return trimmed.length > 0 ? [trimmed.slice(0, 40)] : [];
+  });
+
+  return parsed.length > 0 ? parsed : null;
+}
+
+function parseSeatSlotsField(
+  data: Record<string, unknown>,
+): RsvpRecord["seatSlots"] {
+  const raw = data.seatSlots;
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+
+  const parsed = raw.flatMap((item): { seatOrder: number; seatPosition: string }[] => {
+    if (typeof item !== "object" || item === null) {
+      return [];
+    }
+    const o = item as Record<string, unknown>;
+    const seatOrder = o.seatOrder;
+    const seatPosition = o.seatPosition;
+    if (typeof seatOrder !== "number" || !Number.isFinite(seatOrder)) {
+      return [];
+    }
+    if (typeof seatPosition !== "string") {
+      return [];
+    }
+    return [{ seatOrder, seatPosition }];
+  });
+
+  return parsed.length > 0 ? parsed : null;
+}
+
 export async function createRsvp(input: CreateRsvpInput) {
   const db = getFirebaseDb();
+  const layoutMeta = await fetchSeatingLayoutMeta();
   const payload = {
     ...input,
+    ...(layoutMeta
+      ? {
+          seatingTableCount: layoutMeta.tableCount,
+          seatingTablePositions: layoutMeta.tablePositions,
+          seatingTableNames: layoutMeta.tableNames,
+        }
+      : {}),
     createdAt: Timestamp.now(),
   };
 
@@ -54,6 +141,7 @@ export async function createRsvp(input: CreateRsvpInput) {
 
 export async function listRsvps(): Promise<RsvpRecord[]> {
   const db = getFirebaseDb();
+  const layoutMeta = await fetchSeatingLayoutMeta();
   const snapshot = await getDocs(
     query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc")),
   );
@@ -63,6 +151,25 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
     const createdAt = data.createdAt instanceof Timestamp
       ? data.createdAt.toDate().toISOString()
       : new Date().toISOString();
+
+    let seatingTableCount =
+      typeof data.seatingTableCount === "number" && Number.isFinite(data.seatingTableCount)
+        ? data.seatingTableCount
+        : null;
+    let seatingTablePositions = parseTablePositions(data.seatingTablePositions);
+    let seatingTableNames = parseTableNames(data.seatingTableNames);
+
+    if (layoutMeta) {
+      if (seatingTableCount === null) {
+        seatingTableCount = layoutMeta.tableCount;
+      }
+      if (!seatingTablePositions || seatingTablePositions.length === 0) {
+        seatingTablePositions = layoutMeta.tablePositions;
+      }
+      if (!seatingTableNames || seatingTableNames.length === 0) {
+        seatingTableNames = layoutMeta.tableNames;
+      }
+    }
 
     return {
       id: doc.id,
@@ -81,11 +188,10 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
       seatAssigned: Boolean(data.seatAssigned),
       seatOrder: typeof data.seatOrder === "number" ? data.seatOrder : null,
       seatPosition: typeof data.seatPosition === "string" ? data.seatPosition : null,
-      seatingTableCount:
-        typeof data.seatingTableCount === "number" && Number.isFinite(data.seatingTableCount)
-          ? data.seatingTableCount
-          : null,
-      seatingTablePositions: parseTablePositions(data.seatingTablePositions),
+      seatSlots: parseSeatSlotsField(data),
+      seatingTableCount,
+      seatingTablePositions,
+      seatingTableNames,
       createdAt,
     };
   });
@@ -101,31 +207,47 @@ export async function saveSeatingAssignments(
   seatingLayout: {
     tableCount: number;
     tablePositions: Array<{ x: number; y: number }>;
+    tableNames: string[];
   },
 ) {
   const db = getFirebaseDb();
   const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-  const assignmentMap = new Map(assignments.map((item) => [item.id, item]));
+  const slotsByGuestId = new Map<
+    string,
+    Array<{ seatOrder: number; seatPosition: string }>
+  >();
+  for (const item of assignments) {
+    const list = slotsByGuestId.get(item.id) ?? [];
+    list.push({ seatOrder: item.seatOrder, seatPosition: item.seatPosition });
+    slotsByGuestId.set(item.id, list);
+  }
+  for (const [, list] of slotsByGuestId) {
+    list.sort((a, b) => a.seatOrder - b.seatOrder);
+  }
   const batch = writeBatch(db);
 
   snapshot.docs.forEach((snapshotDoc) => {
     const data = snapshotDoc.data();
-    const assignment = assignmentMap.get(snapshotDoc.id);
+    const slots = slotsByGuestId.get(snapshotDoc.id);
     const isAttending = Boolean(data.attending);
 
-    if (assignment && isAttending) {
+    if (slots && slots.length > 0 && isAttending) {
+      const first = slots[0]!;
       batch.update(snapshotDoc.ref, {
         seatAssigned: true,
-        seatOrder: assignment.seatOrder,
-        seatPosition: assignment.seatPosition,
+        seatSlots: slots,
+        seatOrder: first.seatOrder,
+        seatPosition: first.seatPosition,
         seatingTableCount: seatingLayout.tableCount,
         seatingTablePositions: seatingLayout.tablePositions,
+        seatingTableNames: seatingLayout.tableNames,
       });
       return;
     }
 
     const hasAssignedSeat =
       Boolean(data.seatAssigned) ||
+      (Array.isArray(data.seatSlots) && data.seatSlots.length > 0) ||
       typeof data.seatOrder === "number" ||
       typeof data.seatPosition === "string";
 
@@ -134,8 +256,10 @@ export async function saveSeatingAssignments(
         seatAssigned: false,
         seatOrder: null,
         seatPosition: null,
+        seatSlots: [],
         seatingTableCount: seatingLayout.tableCount,
         seatingTablePositions: seatingLayout.tablePositions,
+        seatingTableNames: seatingLayout.tableNames,
       });
       return;
     }
@@ -143,8 +267,20 @@ export async function saveSeatingAssignments(
     batch.update(snapshotDoc.ref, {
       seatingTableCount: seatingLayout.tableCount,
       seatingTablePositions: seatingLayout.tablePositions,
+      seatingTableNames: seatingLayout.tableNames,
     });
   });
+
+  batch.set(
+    doc(db, SEATING_META_REF[0], SEATING_META_REF[1]),
+    {
+      tableCount: seatingLayout.tableCount,
+      tablePositions: seatingLayout.tablePositions,
+      tableNames: seatingLayout.tableNames,
+      updatedAt: Timestamp.now(),
+    },
+    { merge: true },
+  );
 
   await batch.commit();
 }
