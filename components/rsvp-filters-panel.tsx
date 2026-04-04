@@ -1,5 +1,8 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
+import { GuestSideIcon } from '@/components/guest-side-icon';
 import { Button } from '@/components/ui/button';
 
 export type SideFilter = 'groom' | 'bride';
@@ -11,17 +14,20 @@ type RsvpFiltersPanelProps = {
   selectedRelationshipTags: RelationshipTagFilter[];
   selectedVegetarianStatus: BinaryFilter[];
   selectedAttendingStatus: BinaryFilter[];
+  selectedSingleStatus: BinaryFilter[];
   selectedPaperInvitationStatus: BinaryFilter[];
   onToggleSide: (value: SideFilter) => void;
   onToggleRelationshipTag: (value: RelationshipTagFilter) => void;
   onToggleVegetarianStatus: (value: BinaryFilter) => void;
   onToggleAttendingStatus: (value: BinaryFilter) => void;
+  onToggleSingleStatus: (value: BinaryFilter) => void;
   onTogglePaperInvitationStatus: (value: BinaryFilter) => void;
   onClearFilters: () => void;
   visibleGroups?: {
     side?: boolean;
     vegetarian?: boolean;
     attending?: boolean;
+    single?: boolean;
     relationshipTag?: boolean;
     paperInvitation?: boolean;
   };
@@ -32,11 +38,13 @@ export function RsvpFiltersPanel({
   selectedRelationshipTags,
   selectedVegetarianStatus,
   selectedAttendingStatus,
+  selectedSingleStatus,
   selectedPaperInvitationStatus,
   onToggleSide,
   onToggleRelationshipTag,
   onToggleVegetarianStatus,
   onToggleAttendingStatus,
+  onToggleSingleStatus,
   onTogglePaperInvitationStatus,
   onClearFilters,
   visibleGroups,
@@ -45,6 +53,7 @@ export function RsvpFiltersPanel({
     side: visibleGroups?.side ?? true,
     vegetarian: visibleGroups?.vegetarian ?? true,
     attending: visibleGroups?.attending ?? true,
+    single: visibleGroups?.single ?? true,
     relationshipTag: visibleGroups?.relationshipTag ?? true,
     paperInvitation: visibleGroups?.paperInvitation ?? true,
   };
@@ -68,8 +77,14 @@ export function RsvpFiltersPanel({
           <FilterGroup
             label='男方 / 女方'
             options={[
-              { value: 'groom', label: '男方' },
-              { value: 'bride', label: '女方' },
+              {
+                value: 'groom',
+                label: '男方',
+              },
+              {
+                value: 'bride',
+                label: '女方',
+              },
             ]}
             selectedValues={selectedSides}
             onToggle={onToggleSide}
@@ -97,6 +112,18 @@ export function RsvpFiltersPanel({
             ]}
             selectedValues={selectedAttendingStatus}
             onToggle={onToggleAttendingStatus}
+          />
+        ) : null}
+
+        {showGroup.single ? (
+          <FilterGroup
+            label='是否單身'
+            options={[
+              { value: 'yes', label: '單身' },
+              { value: 'no', label: '非單身' },
+            ]}
+            selectedValues={selectedSingleStatus}
+            onToggle={onToggleSingleStatus}
           />
         ) : null}
 
@@ -136,7 +163,7 @@ function FilterGroup<T extends string>({
   onToggle,
 }: {
   label: string;
-  options: Array<{ value: T; label: string }>;
+  options: Array<{ value: T; label: string; icon?: ReactNode }>;
   selectedValues: T[];
   onToggle: (value: T) => void;
 }) {
@@ -154,7 +181,10 @@ function FilterGroup<T extends string>({
             onChange={() => onToggle(option.value)}
             className='h-3 w-3 appearance-none rounded-full border border-rose-300 bg-white focus:ring-sky-400 checked:border-sky-500 checked:bg-[radial-gradient(circle,_#0ea5e9_38%,_transparent_40%)]'
           />
-          <span>{option.label}</span>
+          <span className='flex items-center gap-1.5'>
+            {option.icon}
+            <span>{option.label}</span>
+          </span>
         </label>
       ))}
     </div>

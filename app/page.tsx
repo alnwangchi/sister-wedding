@@ -22,11 +22,11 @@ export default function HomePage() {
             />
           </div>
           <p className='text-center text-xs font-semibold uppercase tracking-[0.28em] text-rose-400 sm:text-sm sm:tracking-[0.35em]'>
-            Wedding Day
+            Wedding Day 2026.07.19
           </p>
           <h1 className='mt-4 text-center text-3xl font-semibold tracking-tight text-stone-800 sm:mt-6 sm:text-5xl lg:text-6xl'>
             朱威𣽆
-            <span className='mx-3 text-rose-400'>&</span>
+            <span className='mx-3 text-rose-400'> & </span>
             王姿婷
           </h1>
           <p className='mt-4 max-w-2xl text-center whitespace-pre-line text-sm leading-7 text-stone-600 sm:mt-6 sm:text-base sm:leading-8 lg:text-lg'>
@@ -34,7 +34,7 @@ export default function HomePage() {
             {'\n'}
             走向人生的下一段旅程
             {'\n\n'}
-            這一天，希望有你的見證與陪伴🌙
+            這一天，希望有你的見證與陪伴
           </p>
 
           <div className='mt-7 flex sm:mt-10'>
@@ -66,8 +66,8 @@ export default function HomePage() {
             <div className='mt-4 rounded-3xl bg-rose-50/80 px-4 py-3 sm:mt-5 sm:px-5 sm:py-4'>
               <p className='text-sm text-stone-400'>婚禮時間</p>
               <p className='mt-1 whitespace-pre-line text-sm font-medium leading-7 text-stone-700 sm:text-base sm:leading-8'>
-                證婚16:30入席 16:45 開始{'\n'}
-                晚宴18:00迎賓 18:30開席
+                證婚 16:30 入席 16:45 開始{'\n'}
+                晚宴 18:00 迎賓 18:30 開席
               </p>
             </div>
           </div>
@@ -85,23 +85,19 @@ export default function HomePage() {
 
           <div className='rounded-[2rem] border border-rose-100 bg-white/80 p-5 shadow-sm backdrop-blur sm:rounded-[2.5rem] sm:p-8'>
             <div className='flex items-center justify-between gap-4'>
-              <p className='text-sm font-semibold text-rose-500'>停車卡預覽</p>
+              <p className='text-sm font-semibold text-rose-500'>停車卡</p>
               <a
-                href='/api/parking-card'
+                href='/parking-card'
                 target='_blank'
                 rel='noreferrer'
                 className='text-xs font-medium text-rose-500 transition hover:text-rose-600'
               >
-                開啟完整檔案
+                另開頁面查看
               </a>
             </div>
-            <div className='mt-4 overflow-hidden rounded-2xl border border-rose-100 bg-white'>
-              <iframe
-                src='/api/parking-card'
-                title='婚禮停車卡 PDF 預覽'
-                className='h-[420px] w-full'
-              />
-            </div>
+            <p className='mt-4 text-sm leading-7 text-stone-600'>
+              點擊右上角連結可於新頁面查看停車卡圖片。
+            </p>
           </div>
         </div>
       </section>

@@ -8,7 +8,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Minus, Plus, ZoomIn, ZoomOut } from 'lucide-react';
+import { ZoomIn, ZoomOut } from 'lucide-react';
+
 import {
   DndContext,
   DragOverlay,
@@ -48,7 +49,6 @@ const TABLE_CENTER = 180;
 const SEAT_SIZE = 68;
 const TABLE_GAP = 56;
 const CELL = TABLE_WIDTH + TABLE_GAP;
-const MAX_TABLE_COUNT = 100;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 1.8;
 const DEFAULT_ZOOM = MIN_ZOOM;
@@ -76,11 +76,10 @@ type SeatingPlannerTabProps = {
 type GuestInfo = {
   id: string;
   name: string;
-  side: string;
 };
 
 // ─── Preset table layout matching venue floor plan ───────────
-// Layout: left block (13) + VIP centre top (1) + right block (16) = 30 tables
+// Layout: left block (13) + VIP centre top (1) + right block (14) = 28 tables
 //
 //  Left block        VIP        Right block
 //  O O O              O        O O O O
@@ -125,14 +124,13 @@ const PRESET_POSITIONS: TablePosition[] = [
   { x: 6 * CELL, y: 2 * CELL },
   { x: 7 * CELL, y: 2 * CELL },
   { x: 8 * CELL, y: 2 * CELL },
-  // Right block – Row 3
+  // Right block – Row 3（28 桌場地：此列兩桌）
   { x: 5 * CELL, y: 3 * CELL },
   { x: 6 * CELL, y: 3 * CELL },
-  { x: 5 * CELL, y: 0 * CELL },
-  { x: 8 * CELL, y: 3 * CELL },
 ];
 
-const DEFAULT_TABLE_COUNT = 28;
+/** 場地桌次固定 28，與 PRESET_POSITIONS 長度一致 */
+const FIXED_TABLE_COUNT = PRESET_POSITIONS.length;
 
 // ─── Utility functions ───────────────────────────────────────
 
@@ -170,18 +168,10 @@ function resizeAssignments(assignments: Array<string | null>, totalSeats: number
   return [...assignments, ...Array.from({ length: totalSeats - assignments.length }, () => null)];
 }
 
-function getRequiredTableCount(assignments: Array<string | null>) {
-  const lastFilled = assignments.reduce((last, id, i) => (id ? i : last), -1);
-  return Math.max(1, Math.floor(lastFilled / TABLE_CAPACITY) + 1);
-}
-
 function getSavedSeatAssignments(records: RsvpRecord[]) {
-  const maxSeatOrder = records.reduce((max, r) => {
-    if (!r.attending || !r.seatAssigned || typeof r.seatOrder !== 'number') return max;
-    return Math.max(max, r.seatOrder);
-  }, 0);
-  const tableCount = Math.max(1, Math.ceil(maxSeatOrder / TABLE_CAPACITY));
-  const seats = Array.from<string | null>({ length: tableCount * TABLE_CAPACITY }).fill(null);
+  const seats = Array.from<string | null>({
+    length: FIXED_TABLE_COUNT * TABLE_CAPACITY,
+  }).fill(null);
 
   records.forEach((r) => {
     if (!r.attending || !r.seatAssigned || typeof r.seatOrder !== 'number') return;
@@ -193,12 +183,7 @@ function getSavedSeatAssignments(records: RsvpRecord[]) {
   return seats;
 }
 
-function getSavedTableLayout(records: RsvpRecord[], fallbackTableCount: number) {
-  const savedTableCount = records.reduce((max, r) => {
-    if (typeof r.seatingTableCount !== 'number' || !Number.isFinite(r.seatingTableCount)) return max;
-    return Math.max(max, Math.floor(r.seatingTableCount));
-  }, 0);
-
+function getSavedTableLayout(records: RsvpRecord[]) {
   const sourcePositions = records.find((r) => Array.isArray(r.seatingTablePositions))
     ?.seatingTablePositions;
   const safePositions = (sourcePositions ?? []).flatMap((p) => {
@@ -212,8 +197,10 @@ function getSavedTableLayout(records: RsvpRecord[], fallbackTableCount: number) 
     return [clampTablePosition({ x: p.x, y: p.y })];
   });
 
-  const tableCount = Math.max(1, fallbackTableCount, savedTableCount);
-  return { tableCount, tablePositions: resizeTablePositions(safePositions, tableCount) };
+  return {
+    tableCount: FIXED_TABLE_COUNT,
+    tablePositions: resizeTablePositions(safePositions, FIXED_TABLE_COUNT),
+  };
 }
 
 function getLocalStoredTableLayout() {
@@ -222,8 +209,7 @@ function getLocalStoredTableLayout() {
     const raw = window.localStorage.getItem(SEATING_LAYOUT_STORAGE_KEY);
     if (!raw) return null;
 
-    const parsed = JSON.parse(raw) as { tableCount?: unknown; tablePositions?: unknown };
-    if (typeof parsed.tableCount !== 'number' || !Number.isFinite(parsed.tableCount)) return null;
+    const parsed = JSON.parse(raw) as { tablePositions?: unknown };
     if (!Array.isArray(parsed.tablePositions)) return null;
 
     const safePositions = parsed.tablePositions.flatMap((p: unknown) => {
@@ -239,8 +225,9 @@ function getLocalStoredTableLayout() {
       return [clampTablePosition({ x: c.x, y: c.y })];
     });
 
-    const tableCount = Math.max(1, Math.floor(parsed.tableCount));
-    return { tableCount, tablePositions: resizeTablePositions(safePositions, tableCount) };
+    return {
+      tablePositions: resizeTablePositions(safePositions, FIXED_TABLE_COUNT),
+    };
   } catch {
     return null;
   }
@@ -279,7 +266,6 @@ function DraggableGuest({ guest }: { guest: GuestInfo }) {
       }`}
     >
       {guest.name}
-      <span className='ml-1 text-stone-400'>({guest.side === 'groom' ? '男方' : '女方'})</span>
     </div>
   );
 }
@@ -336,19 +322,12 @@ export function SeatingPlannerTab({
   // ── Derived initial data ──
 
   const initialSavedAssignments = useMemo(() => getSavedSeatAssignments(records), [records]);
-  const initialSavedLayout = useMemo(
-    () =>
-      getSavedTableLayout(
-        records,
-        Math.max(1, Math.ceil(initialSavedAssignments.length / TABLE_CAPACITY)),
-      ),
-    [initialSavedAssignments.length, records],
-  );
+  const initialSavedLayout = useMemo(() => getSavedTableLayout(records), [records]);
   const attendingGuests = useMemo(
     () =>
       records
         .filter((r) => r.attending)
-        .map((r) => ({ id: r.id, name: r.name, side: r.side })),
+        .map((r) => ({ id: r.id, name: r.name })),
     [records],
   );
   const attendingGuestMap = useMemo(
@@ -362,7 +341,6 @@ export function SeatingPlannerTab({
 
   // ── State ──
 
-  const [tableCount, setTableCount] = useState(() => initialSavedLayout.tableCount);
   const [tablePositions, setTablePositions] = useState<TablePosition[]>(
     () => initialSavedLayout.tablePositions,
   );
@@ -401,13 +379,11 @@ export function SeatingPlannerTab({
 
     const localLayout = getLocalStoredTableLayout();
     if (localLayout) {
-      setTableCount(localLayout.tableCount);
       setTablePositions(localLayout.tablePositions);
       return;
     }
 
-    setTableCount(DEFAULT_TABLE_COUNT);
-    setTablePositions([...PRESET_POSITIONS]);
+    setTablePositions(resizeTablePositions([...PRESET_POSITIONS], FIXED_TABLE_COUNT));
   }, [records]);
 
   useEffect(() => {
@@ -415,13 +391,6 @@ export function SeatingPlannerTab({
     setSeatAssignments((prev) => prev.map((id) => (id && validIds.has(id) ? id : null)));
     setLastSavedSeatAssignments((prev) => prev.map((id) => (id && validIds.has(id) ? id : null)));
   }, [attendingGuests]);
-
-  useEffect(() => {
-    const totalSeats = tableCount * TABLE_CAPACITY;
-    setSeatAssignments((prev) => resizeAssignments(prev, totalSeats));
-    setLastSavedSeatAssignments((prev) => resizeAssignments(prev, totalSeats));
-    setTablePositions((prev) => resizeTablePositions(prev, tableCount));
-  }, [tableCount]);
 
   // ── Derived values ──
 
@@ -439,11 +408,7 @@ export function SeatingPlannerTab({
   );
 
   const seatedCount = assignedGuestIds.size;
-  const totalSeats = tableCount * TABLE_CAPACITY;
-  const requiredTableCount = useMemo(
-    () => getRequiredTableCount(seatAssignments),
-    [seatAssignments],
-  );
+  const totalSeats = FIXED_TABLE_COUNT * TABLE_CAPACITY;
   const zoomPercent = Math.round(canvasZoom * 100);
   const hasUnsavedChanges = useMemo(() => {
     if (seatAssignments.length !== lastSavedSeatAssignments.length) return true;
@@ -462,18 +427,6 @@ export function SeatingPlannerTab({
 
   function resetSeats() {
     setSeatAssignments(Array.from({ length: totalSeats }, () => null));
-  }
-
-  function updateTableCount(nextCount: number) {
-    const normalized = Math.min(MAX_TABLE_COUNT, Math.max(1, Math.floor(nextCount)));
-    if (normalized < requiredTableCount) {
-      setSaveError(true);
-      setSaveMessage(`目前至少需要 ${requiredTableCount} 桌，請先清除後段桌位上的賓客。`);
-      return;
-    }
-    setSaveMessage('');
-    setSaveError(false);
-    setTableCount(normalized);
   }
 
   // ── Zoom controls ──
@@ -561,11 +514,15 @@ export function SeatingPlannerTab({
           : [],
       );
 
-      const normalizedPositions = resizeTablePositions(tablePositions, tableCount).map(
-        clampTablePosition,
-      );
-      await onSave(assignments, { tableCount, tablePositions: normalizedPositions });
-      saveTableLayoutToLocalStorage(tableCount, normalizedPositions);
+      const normalizedPositions = resizeTablePositions(
+        tablePositions,
+        FIXED_TABLE_COUNT,
+      ).map(clampTablePosition);
+      await onSave(assignments, {
+        tableCount: FIXED_TABLE_COUNT,
+        tablePositions: normalizedPositions,
+      });
+      saveTableLayoutToLocalStorage(FIXED_TABLE_COUNT, normalizedPositions);
       setLastSavedSeatAssignments([...seatAssignments]);
       setSaveMessage('座位安排已儲存。');
     } catch (error) {
@@ -594,7 +551,8 @@ export function SeatingPlannerTab({
           <div>
             <p className='text-sm font-semibold text-stone-700'>座位安排（多桌畫布）</p>
             <p className='mt-1 text-sm text-stone-500'>
-              先拖拉上方賓客到下方畫布中的桌位，每桌共 {TABLE_CAPACITY} 位，可自由調整桌數與縮放。
+              先拖拉上方賓客到下方畫布中的桌位，每桌共 {TABLE_CAPACITY} 位，場地固定 {FIXED_TABLE_COUNT}{' '}
+              桌，可調整畫布縮放。
             </p>
           </div>
           <div className='flex items-center gap-2'>
@@ -633,47 +591,9 @@ export function SeatingPlannerTab({
 
           <div className='flex flex-wrap items-center justify-between gap-2'>
             <p className='text-xs font-medium text-stone-600'>會出席賓客清單（可拖拉）</p>
-            <div className='flex flex-wrap items-center gap-3 text-xs text-stone-500'>
-              <p>
-                已安排 {seatedCount} / {totalSeats}
-              </p>
-              <div className='flex items-center gap-2'>
-                <span>桌數</span>
-                <Button
-                  type='button'
-                  size='icon'
-                  variant='outline'
-                  className='h-7 w-7 rounded-full'
-                  onClick={() => updateTableCount(tableCount - 1)}
-                  disabled={tableCount <= requiredTableCount}
-                >
-                  <Minus aria-hidden='true' className='size-3.5' />
-                  <span className='sr-only'>減少桌數</span>
-                </Button>
-                <input
-                  type='number'
-                  min={1}
-                  max={MAX_TABLE_COUNT}
-                  value={tableCount}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (Number.isFinite(v)) updateTableCount(v);
-                  }}
-                  className='h-7 w-16 rounded-lg border border-rose-200 bg-white px-2 text-center text-xs text-stone-700 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200'
-                />
-                <Button
-                  type='button'
-                  size='icon'
-                  variant='outline'
-                  className='h-7 w-7 rounded-full'
-                  onClick={() => updateTableCount(tableCount + 1)}
-                  disabled={tableCount >= MAX_TABLE_COUNT}
-                >
-                  <Plus aria-hidden='true' className='size-3.5' />
-                  <span className='sr-only'>增加桌數</span>
-                </Button>
-              </div>
-            </div>
+            <p className='text-xs text-stone-500'>
+              已安排 {seatedCount} / {totalSeats}（固定 {FIXED_TABLE_COUNT} 桌）
+            </p>
           </div>
 
           {unassignedGuests.length === 0 ? (
@@ -748,7 +668,7 @@ export function SeatingPlannerTab({
                   className='relative'
                   style={{ width: FIXED_CANVAS_WIDTH, height: FIXED_CANVAS_HEIGHT }}
                 >
-                  {Array.from({ length: tableCount }, (_, tableIndex) => {
+                  {Array.from({ length: FIXED_TABLE_COUNT }, (_, tableIndex) => {
                     const tableNumber = tableIndex + 1;
                     const tablePosition = clampTablePosition(
                       tablePositions[tableIndex] ?? getDefaultTablePosition(tableIndex),
@@ -832,9 +752,6 @@ export function SeatingPlannerTab({
         {activeDragGuest ? (
           <div className='rounded-full border border-rose-300 bg-rose-100 px-3 py-1.5 text-xs font-medium text-stone-700 shadow-lg'>
             {activeDragGuest.name}
-            <span className='ml-1 text-stone-400'>
-              ({activeDragGuest.side === 'groom' ? '男方' : '女方'})
-            </span>
           </div>
         ) : null}
       </DragOverlay>

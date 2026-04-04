@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Carrot, CircleCheck, CircleX, Plus, Trash2 } from 'lucide-react';
+import { Carrot, CircleCheck, CircleX, Copy, Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import type { RsvpRecord } from '@/types/rsvp';
+import { GuestSideIcon, GuestSideLabel } from '@/components/guest-side-icon';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -37,6 +39,38 @@ const tabs = [
 ] as const;
 
 const PAGE_SIZE = 20;
+
+function CopyableTableCell({ rawText, copyLabel }: { rawText: string; copyLabel: string }) {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    return <>—</>;
+  }
+
+  return (
+    <div className='flex items-center justify-center gap-1.5'>
+      <span className='min-w-0 max-w-full break-words'>{trimmed}</span>
+      <Button
+        type='button'
+        variant='ghost'
+        size='icon'
+        className='size-8 shrink-0 text-stone-500 hover:text-stone-800'
+        title='複製'
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(trimmed);
+            toast.success('已複製');
+          } catch {
+            toast.error('無法複製，請手動選取文字');
+          }
+        }}
+      >
+        <Copy aria-hidden='true' className='size-4' />
+        <span className='sr-only'>{copyLabel}</span>
+      </Button>
+    </div>
+  );
+}
+
 type SeatingAssignmentPayload = {
   id: string;
   seatOrder: number;
@@ -63,9 +97,10 @@ export function AdminDashboard({
   );
   const [selectedVegetarianStatus, setSelectedVegetarianStatus] = useState<BinaryFilter[]>([]);
   const [selectedAttendingStatus, setSelectedAttendingStatus] = useState<BinaryFilter[]>([]);
-  const [selectedPaperInvitationStatus, setSelectedPaperInvitationStatus] = useState<BinaryFilter[]>(
-    [],
-  );
+  const [selectedSingleStatus, setSelectedSingleStatus] = useState<BinaryFilter[]>([]);
+  const [selectedPaperInvitationStatus, setSelectedPaperInvitationStatus] = useState<
+    BinaryFilter[]
+  >([]);
   const [localRecords, setLocalRecords] = useState(records);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDeleteRecord, setPendingDeleteRecord] = useState<RsvpRecord | null>(null);
@@ -101,6 +136,9 @@ export function AdminDashboard({
       const attendingMatched =
         selectedAttendingStatus.length === 0 ||
         selectedAttendingStatus.includes(record.attending ? 'yes' : 'no');
+      const singleMatched =
+        selectedSingleStatus.length === 0 ||
+        selectedSingleStatus.includes(record.isSingle ? 'yes' : 'no');
       const relationshipTagMatched =
         selectedRelationshipTags.length === 0 ||
         selectedRelationshipTags.includes(record.relationshipTag);
@@ -112,6 +150,7 @@ export function AdminDashboard({
         sideMatched &&
         vegetarianMatched &&
         attendingMatched &&
+        singleMatched &&
         relationshipTagMatched &&
         paperInvitationMatched
       );
@@ -122,6 +161,7 @@ export function AdminDashboard({
     selectedPaperInvitationStatus,
     selectedRelationshipTags,
     selectedSides,
+    selectedSingleStatus,
     selectedVegetarianStatus,
   ]);
 
@@ -133,6 +173,9 @@ export function AdminDashboard({
       const vegetarianMatched =
         selectedVegetarianStatus.length === 0 ||
         (vegetarianStatus !== null && selectedVegetarianStatus.includes(vegetarianStatus));
+      const singleMatched =
+        selectedSingleStatus.length === 0 ||
+        selectedSingleStatus.includes(record.isSingle ? 'yes' : 'no');
       const relationshipTagMatched =
         selectedRelationshipTags.length === 0 ||
         selectedRelationshipTags.includes(record.relationshipTag);
@@ -140,13 +183,20 @@ export function AdminDashboard({
         selectedPaperInvitationStatus.length === 0 ||
         selectedPaperInvitationStatus.includes(record.needsPaperInvitation ? 'yes' : 'no');
 
-      return sideMatched && vegetarianMatched && relationshipTagMatched && paperInvitationMatched;
+      return (
+        sideMatched &&
+        vegetarianMatched &&
+        singleMatched &&
+        relationshipTagMatched &&
+        paperInvitationMatched
+      );
     });
   }, [
     localRecords,
     selectedPaperInvitationStatus,
     selectedRelationshipTags,
     selectedSides,
+    selectedSingleStatus,
     selectedVegetarianStatus,
   ]);
 
@@ -365,6 +415,7 @@ export function AdminDashboard({
     setSelectedRelationshipTags([]);
     setSelectedVegetarianStatus([]);
     setSelectedAttendingStatus([]);
+    setSelectedSingleStatus([]);
     setSelectedPaperInvitationStatus([]);
   };
 
@@ -429,6 +480,7 @@ export function AdminDashboard({
                 selectedRelationshipTags={selectedRelationshipTags}
                 selectedVegetarianStatus={selectedVegetarianStatus}
                 selectedAttendingStatus={selectedAttendingStatus}
+                selectedSingleStatus={selectedSingleStatus}
                 selectedPaperInvitationStatus={selectedPaperInvitationStatus}
                 onToggleSide={(value) => {
                   setCurrentPage(1);
@@ -446,6 +498,10 @@ export function AdminDashboard({
                   setCurrentPage(1);
                   toggleMultiSelect(value, setSelectedAttendingStatus);
                 }}
+                onToggleSingleStatus={(value) => {
+                  setCurrentPage(1);
+                  toggleMultiSelect(value, setSelectedSingleStatus);
+                }}
                 onTogglePaperInvitationStatus={(value) => {
                   setCurrentPage(1);
                   toggleMultiSelect(value, setSelectedPaperInvitationStatus);
@@ -461,21 +517,20 @@ export function AdminDashboard({
 
               <div className='rounded-3xl border border-rose-100'>
                 <Table>
-                  <TableCaption>每頁顯示 20 筆，可搭配上方篩選條件快速檢視資料。</TableCaption>
                   <TableHeader>
                     <TableRow className='border-rose-100 hover:bg-transparent'>
-                      <TableHead>姓名</TableHead>
+                      <TableHead className='whitespace-nowrap'>姓名</TableHead>
                       <TableHead>電話</TableHead>
-                      <TableHead>是否參加</TableHead>
+                      <TableHead>參加</TableHead>
                       <TableHead>人數</TableHead>
-                      <TableHead>電子信箱</TableHead>
-                      <TableHead>吃素需求</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>吃素</TableHead>
                       <TableHead>親友別</TableHead>
-                      <TableHead>關係標籤</TableHead>
-                      <TableHead>是否單身</TableHead>
-                      <TableHead>紙本喜帖</TableHead>
-                      <TableHead className='min-w-[12rem]'>收件地址</TableHead>
-                      <TableHead>座位安排</TableHead>
+                      <TableHead>關係</TableHead>
+                      <TableHead>單身</TableHead>
+                      <TableHead>紙帖</TableHead>
+                      <TableHead className='min-w-[12rem]'>地址</TableHead>
+                      <TableHead>座位</TableHead>
                       <TableHead className='min-w-[16rem]'>留言</TableHead>
                       <TableHead className='w-20 text-center'>刪除</TableHead>
                     </TableRow>
@@ -483,8 +538,12 @@ export function AdminDashboard({
                   <TableBody>
                     {currentRecords.map((record) => (
                       <TableRow key={record.id} className='border-rose-100'>
-                        <TableCell className='font-medium text-stone-700'>{record.name}</TableCell>
-                        <TableCell>{record.phone}</TableCell>
+                        <TableCell className='whitespace-nowrap font-medium text-stone-700'>
+                          {record.name}
+                        </TableCell>
+                        <TableCell>
+                          <CopyableTableCell rawText={record.phone} copyLabel='複製電話' />
+                        </TableCell>
                         <TableCell>
                           <span
                             className='inline-flex items-center justify-center'
@@ -501,7 +560,9 @@ export function AdminDashboard({
                           </span>
                         </TableCell>
                         <TableCell>{record.guestCount}</TableCell>
-                        <TableCell>{record.email}</TableCell>
+                        <TableCell>
+                          <CopyableTableCell rawText={record.email} copyLabel='複製電子信箱' />
+                        </TableCell>
                         <TableCell>
                           {record.vegetarian === null ? (
                             '—'
@@ -517,7 +578,9 @@ export function AdminDashboard({
                             </span>
                           )}
                         </TableCell>
-                        <TableCell>{record.side === 'groom' ? '男方' : '女方'}</TableCell>
+                        <TableCell>
+                          <GuestSideLabel side={record.side} />
+                        </TableCell>
                         <TableCell>
                           <Badge className={relationshipTagBadgeClass[record.relationshipTag]}>
                             {relationshipTagLabel[record.relationshipTag]}
@@ -525,13 +588,38 @@ export function AdminDashboard({
                         </TableCell>
                         <TableCell>{record.isSingle ? '是' : '否'}</TableCell>
                         <TableCell>{record.needsPaperInvitation ? '需要' : '不需要'}</TableCell>
-                        <TableCell>{record.needsPaperInvitation ? record.mailingAddress || '—' : '—'}</TableCell>
                         <TableCell>
-                          {record.attending
-                            ? record.seatAssigned
-                              ? '已安排'
-                              : '未安排'
-                            : '不適用'}
+                          <CopyableTableCell
+                            rawText={record.needsPaperInvitation ? record.mailingAddress : ''}
+                            copyLabel='複製收件地址'
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {record.attending ? (
+                            <span
+                              className='inline-flex items-center justify-center'
+                              title={record.seatAssigned ? '已安排' : '未安排'}
+                            >
+                              {record.seatAssigned ? (
+                                <CircleCheck
+                                  aria-hidden='true'
+                                  className='size-4 text-emerald-600'
+                                />
+                              ) : (
+                                <span
+                                  aria-hidden='true'
+                                  className='inline-flex size-4 items-center justify-center text-[15px] font-semibold leading-none text-stone-500'
+                                >
+                                  ?
+                                </span>
+                              )}
+                              <span className='sr-only'>
+                                {record.seatAssigned ? '已安排' : '未安排'}
+                              </span>
+                            </span>
+                          ) : (
+                            '不適用'
+                          )}
                         </TableCell>
                         <TableCell>{record.message || '—'}</TableCell>
                         <TableCell className='text-center'>
@@ -600,6 +688,7 @@ export function AdminDashboard({
               selectedRelationshipTags={selectedRelationshipTags}
               selectedVegetarianStatus={selectedVegetarianStatus}
               selectedAttendingStatus={selectedAttendingStatus}
+              selectedSingleStatus={selectedSingleStatus}
               selectedPaperInvitationStatus={selectedPaperInvitationStatus}
               onToggleSide={(value) => {
                 setCurrentPage(1);
@@ -616,6 +705,10 @@ export function AdminDashboard({
               onToggleAttendingStatus={(value) => {
                 setCurrentPage(1);
                 toggleMultiSelect(value, setSelectedAttendingStatus);
+              }}
+              onToggleSingleStatus={(value) => {
+                setCurrentPage(1);
+                toggleMultiSelect(value, setSelectedSingleStatus);
               }}
               onTogglePaperInvitationStatus={(value) => {
                 setCurrentPage(1);
@@ -723,6 +816,7 @@ export function AdminDashboard({
                     onChange={() => setNewGuestSide('groom')}
                     disabled={creating}
                   />
+                  <GuestSideIcon side='groom' />
                   男方親友
                 </label>
                 <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
@@ -734,6 +828,7 @@ export function AdminDashboard({
                     onChange={() => setNewGuestSide('bride')}
                     disabled={creating}
                   />
+                  <GuestSideIcon side='bride' />
                   女方親友
                 </label>
               </div>
