@@ -181,7 +181,8 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
       vegetarian: (data.vegetarian ?? null) as RsvpRecord["vegetarian"],
       side: (data.side ?? "groom") as RsvpRecord["side"],
       relationshipTag: (data.relationshipTag ?? "friend") as RsvpRecord["relationshipTag"],
-      isSingle: Boolean(data.isSingle),
+      isSingle:
+        data.isSingle === true ? true : data.isSingle === false ? false : null,
       needsPaperInvitation: Boolean(data.needsPaperInvitation),
       mailingAddress: String(data.mailingAddress ?? ""),
       message: String(data.message ?? ""),

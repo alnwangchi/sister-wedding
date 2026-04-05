@@ -21,12 +21,10 @@ export const rsvpSchema = z
     side: z.enum(['groom', 'bride'], {
       error: '請選擇男方或女方親友',
     }),
-    relationshipTag: z.enum(['classmate', 'colleague', 'friend'], {
+    relationshipTag: z.enum(['classmate', 'colleague', 'friend', 'relative'], {
       error: '請選擇關係標籤',
     }),
-    isSingle: z.enum(['yes', 'no'], {
-      error: '請選擇是否單身',
-    }),
+    isSingle: z.enum(['yes', 'no']).optional(),
     needsPaperInvitation: z
       .enum(['yes', 'no'], {
         error: '請選擇是否需要紙本喜帖',

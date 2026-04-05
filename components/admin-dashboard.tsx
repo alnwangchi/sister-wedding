@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Carrot, CircleCheck, CircleX, Copy, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import type { RsvpRecord } from '@/types/rsvp';
+import type { RelationshipTag, RsvpRecord } from '@/types/rsvp';
 import { GuestSideIcon, GuestSideLabel } from '@/components/guest-side-icon';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -122,9 +122,7 @@ export function AdminDashboard({
   const [newGuestName, setNewGuestName] = useState('');
   const [newGuestVegetarian, setNewGuestVegetarian] = useState(false);
   const [newGuestSide, setNewGuestSide] = useState<'groom' | 'bride'>('groom');
-  const [newGuestRelationshipTag, setNewGuestRelationshipTag] = useState<
-    'classmate' | 'colleague' | 'friend'
-  >('friend');
+  const [newGuestRelationshipTag, setNewGuestRelationshipTag] = useState<RelationshipTag>('friend');
   const [createError, setCreateError] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -150,9 +148,11 @@ export function AdminDashboard({
       const attendingMatched =
         selectedAttendingStatus.length === 0 ||
         selectedAttendingStatus.includes(record.attending ? 'yes' : 'no');
+      const singleStatus =
+        record.isSingle === true ? 'yes' : record.isSingle === false ? 'no' : null;
       const singleMatched =
         selectedSingleStatus.length === 0 ||
-        selectedSingleStatus.includes(record.isSingle ? 'yes' : 'no');
+        (singleStatus !== null && selectedSingleStatus.includes(singleStatus));
       const relationshipTagMatched =
         selectedRelationshipTags.length === 0 ||
         selectedRelationshipTags.includes(record.relationshipTag);
@@ -187,9 +187,11 @@ export function AdminDashboard({
       const vegetarianMatched =
         selectedVegetarianStatus.length === 0 ||
         (vegetarianStatus !== null && selectedVegetarianStatus.includes(vegetarianStatus));
+      const singleStatus =
+        record.isSingle === true ? 'yes' : record.isSingle === false ? 'no' : null;
       const singleMatched =
         selectedSingleStatus.length === 0 ||
-        selectedSingleStatus.includes(record.isSingle ? 'yes' : 'no');
+        (singleStatus !== null && selectedSingleStatus.includes(singleStatus));
       const relationshipTagMatched =
         selectedRelationshipTags.length === 0 ||
         selectedRelationshipTags.includes(record.relationshipTag);
@@ -275,7 +277,7 @@ export function AdminDashboard({
           vegetarian: newGuestVegetarian ? 'vegetarian' : 'none',
           side: newGuestSide,
           relationshipTag: newGuestRelationshipTag,
-          isSingle: false,
+          isSingle: null,
           needsPaperInvitation: false,
           mailingAddress: '',
           message: '',
@@ -619,7 +621,13 @@ export function AdminDashboard({
                             {relationshipTagLabel[record.relationshipTag]}
                           </Badge>
                         </TableCell>
-                        <TableCell>{record.isSingle ? '是' : '否'}</TableCell>
+                        <TableCell>
+                          {record.isSingle === true
+                            ? '是'
+                            : record.isSingle === false
+                              ? '否'
+                              : '—'}
+                        </TableCell>
                         <TableCell>{record.needsPaperInvitation ? '需要' : '不需要'}</TableCell>
                         <TableCell>
                           <CopyableTableCell
@@ -868,7 +876,7 @@ export function AdminDashboard({
             </div>
             <div className='space-y-1.5'>
               <p className='text-sm font-medium text-stone-700'>關係標籤</p>
-              <div className='grid grid-cols-3 gap-3'>
+              <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
                 <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
                   <input
                     type='radio'
@@ -901,6 +909,17 @@ export function AdminDashboard({
                     disabled={creating}
                   />
                   朋友
+                </label>
+                <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
+                  <input
+                    type='radio'
+                    name='new-guest-relationship-tag'
+                    value='relative'
+                    checked={newGuestRelationshipTag === 'relative'}
+                    onChange={() => setNewGuestRelationshipTag('relative')}
+                    disabled={creating}
+                  />
+                  親戚
                 </label>
               </div>
             </div>
@@ -947,12 +966,14 @@ const relationshipTagLabel = {
   classmate: '同學',
   colleague: '同事',
   friend: '朋友',
+  relative: '親戚',
 } as const;
 
 const relationshipTagBadgeClass = {
   classmate: 'border-violet-200 bg-violet-50 text-violet-700',
   colleague: 'border-cyan-200 bg-cyan-50 text-cyan-700',
   friend: 'border-rose-200 bg-rose-50 text-rose-700',
+  relative: 'border-amber-200 bg-amber-50 text-amber-800',
 } as const;
 
 function toggleMultiSelect<T>(value: T, setter: React.Dispatch<React.SetStateAction<T[]>>) {

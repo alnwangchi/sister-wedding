@@ -9,7 +9,8 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
-import { Pencil, ZoomIn, ZoomOut } from 'lucide-react';
+import { FileDown, ImageDown, Pencil, ZoomIn, ZoomOut } from 'lucide-react';
+import { toast } from 'sonner';
 
 import {
   DndContext,
@@ -455,10 +456,12 @@ export function SeatingPlannerTab({
   const [canvasZoom, setCanvasZoom] = useState(DEFAULT_ZOOM);
   const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
   const [isCanvasPointerDown, setIsCanvasPointerDown] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // ── Refs ──
 
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
+  const exportCanvasRef = useRef<HTMLDivElement>(null);
 
   // ── dnd-kit sensors ──
 
@@ -610,14 +613,12 @@ export function SeatingPlannerTab({
     transformRef.current?.zoomOut(ZOOM_BUTTON_STEP, 200);
   }
 
-  function handleSliderZoom(newScale: number) {
-    const ref = transformRef.current;
-    if (!ref) return;
-
+  /** 以視窗中心為錨點變更縮放（與縮放滑桿一致；匯出時需暫時設為 1 才能正確擷取畫布） */
+  function applyScaleKeepingCenter(ref: ReactZoomPanPinchRef, newScale: number, animationTime = 0) {
     const ts = ref.instance.transformState;
     const wrapper = ref.instance.wrapperComponent;
     if (!wrapper) {
-      ref.setTransform(ts.positionX, ts.positionY, newScale, 0);
+      ref.setTransform(ts.positionX, ts.positionY, newScale, animationTime);
       return;
     }
 
@@ -626,7 +627,13 @@ export function SeatingPlannerTab({
     const cy = rect.height / 2;
     const contentX = (cx - ts.positionX) / ts.scale;
     const contentY = (cy - ts.positionY) / ts.scale;
-    ref.setTransform(cx - contentX * newScale, cy - contentY * newScale, newScale, 0);
+    ref.setTransform(cx - contentX * newScale, cy - contentY * newScale, newScale, animationTime);
+  }
+
+  function handleSliderZoom(newScale: number) {
+    const ref = transformRef.current;
+    if (!ref) return;
+    applyScaleKeepingCenter(ref, newScale, 0);
   }
 
   const handleTransformed = useCallback(
@@ -715,6 +722,105 @@ export function SeatingPlannerTab({
 
   async function handleSaveSeats() {
     await persistSeating(tableNames);
+  }
+
+  function exportFilenameStamp(): string {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  async function captureSeatingLayoutCanvas(): Promise<HTMLCanvasElement> {
+    const el = exportCanvasRef.current;
+    if (!el) {
+      throw new Error('找不到畫布');
+    }
+
+    const api = transformRef.current;
+    let saved: { positionX: number; positionY: number; scale: number } | null = null;
+    if (api) {
+      const ts = api.instance.transformState;
+      saved = { positionX: ts.positionX, positionY: ts.positionY, scale: ts.scale };
+      // resetTransform 會回到 initialScale（MIN_ZOOM 0.25），不是 1，會讓擷取庫算出錯誤畫面
+      applyScaleKeepingCenter(api, 1, 0);
+    }
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
+    try {
+      const { toCanvas } = await import('html-to-image');
+      return await toCanvas(el, {
+        pixelRatio: 2,
+        backgroundColor: '#fdf2f8',
+        cacheBust: true,
+        skipAutoScale: true,
+        filter: (domNode) => {
+          if (!(domNode instanceof HTMLElement)) return true;
+          return !domNode.hasAttribute('data-export-ignore');
+        },
+      });
+    } finally {
+      if (api && saved) {
+        api.setTransform(saved.positionX, saved.positionY, saved.scale, 0);
+      }
+    }
+  }
+
+  async function handleExportSeatingImage() {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const canvas = await captureSeatingLayoutCanvas();
+      const stamp = exportFilenameStamp();
+      const link = document.createElement('a');
+      link.download = `seating-plan-${stamp}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      toast.success('已匯出圖片');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '匯出失敗';
+      toast.error(msg);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  async function handleExportSeatingPdf() {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const canvas = await captureSeatingLayoutCanvas();
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const imgData = canvas.toDataURL('image/png');
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const props = pdf.getImageProperties(imgData);
+      const imgRatio = props.width / props.height;
+      const pageRatio = pageW / pageH;
+      let w: number;
+      let h: number;
+      if (imgRatio > pageRatio) {
+        w = pageW;
+        h = pageW / imgRatio;
+      } else {
+        h = pageH;
+        w = pageH * imgRatio;
+      }
+      const x = (pageW - w) / 2;
+      const y = (pageH - h) / 2;
+      pdf.addImage(imgData, 'PNG', x, y, w, h);
+      const stamp = exportFilenameStamp();
+      pdf.save(`seating-plan-${stamp}.pdf`);
+      toast.success('已匯出 PDF');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '匯出失敗';
+      toast.error(msg);
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   function openRenameTableDialog(tableIndex: number) {
@@ -814,40 +920,66 @@ export function SeatingPlannerTab({
 
         {/* Canvas with zoom controls */}
         <div className='mt-6'>
-          <div className='mb-3 flex items-center justify-end gap-2 text-xs text-stone-500'>
-            <Button
-              type='button'
-              size='icon'
-              variant='outline'
-              className='h-7 w-7 rounded-full'
-              onClick={handleZoomOut}
-              disabled={canvasZoom <= MIN_ZOOM}
-            >
-              <ZoomOut aria-hidden='true' className='size-3.5' />
-              <span className='sr-only'>縮小畫布</span>
-            </Button>
-            <input
-              type='range'
-              min={MIN_ZOOM}
-              max={MAX_ZOOM}
-              step={0.05}
-              value={canvasZoom}
-              onChange={(e) => handleSliderZoom(Number(e.target.value))}
-              className='w-28 accent-rose-500'
-              aria-label='畫布縮放'
-            />
-            <Button
-              type='button'
-              size='icon'
-              variant='outline'
-              className='h-7 w-7 rounded-full'
-              onClick={handleZoomIn}
-              disabled={canvasZoom >= MAX_ZOOM}
-            >
-              <ZoomIn aria-hidden='true' className='size-3.5' />
-              <span className='sr-only'>放大畫布</span>
-            </Button>
-            <span className='min-w-[3.5rem] text-right'>{zoomPercent}%</span>
+          <div className='mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className='h-8 gap-1.5 rounded-full text-xs'
+                onClick={() => void handleExportSeatingImage()}
+                disabled={isExporting || !!activeDragLabel}
+              >
+                <ImageDown aria-hidden='true' className='size-3.5' />
+                匯出圖片
+              </Button>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className='h-8 gap-1.5 rounded-full text-xs'
+                onClick={() => void handleExportSeatingPdf()}
+                disabled={isExporting || !!activeDragLabel}
+              >
+                <FileDown aria-hidden='true' className='size-3.5' />
+                匯出 PDF
+              </Button>
+            </div>
+            <div className='flex items-center gap-2'>
+              <Button
+                type='button'
+                size='icon'
+                variant='outline'
+                className='h-7 w-7 rounded-full'
+                onClick={handleZoomOut}
+                disabled={canvasZoom <= MIN_ZOOM}
+              >
+                <ZoomOut aria-hidden='true' className='size-3.5' />
+                <span className='sr-only'>縮小畫布</span>
+              </Button>
+              <input
+                type='range'
+                min={MIN_ZOOM}
+                max={MAX_ZOOM}
+                step={0.05}
+                value={canvasZoom}
+                onChange={(e) => handleSliderZoom(Number(e.target.value))}
+                className='w-28 accent-rose-500'
+                aria-label='畫布縮放'
+              />
+              <Button
+                type='button'
+                size='icon'
+                variant='outline'
+                className='h-7 w-7 rounded-full'
+                onClick={handleZoomIn}
+                disabled={canvasZoom >= MAX_ZOOM}
+              >
+                <ZoomIn aria-hidden='true' className='size-3.5' />
+                <span className='sr-only'>放大畫布</span>
+              </Button>
+              <span className='min-w-[3.5rem] text-right'>{zoomPercent}%</span>
+            </div>
           </div>
 
           <div
@@ -886,6 +1018,7 @@ export function SeatingPlannerTab({
                   }}
                 >
                   <div
+                    ref={exportCanvasRef}
                     className='relative'
                     style={{
                       position: 'absolute',
@@ -919,6 +1052,7 @@ export function SeatingPlannerTab({
                               type='button'
                               variant='outline'
                               size='icon'
+                              data-export-ignore
                               className='h-7 w-7 shrink-0 rounded-full border-rose-200 text-stone-600'
                               onPointerDown={(e) => e.stopPropagation()}
                               onClick={() => openRenameTableDialog(tableIndex)}
@@ -975,6 +1109,7 @@ export function SeatingPlannerTab({
                                   </span>
                                   <button
                                     type='button'
+                                    data-export-ignore
                                     onClick={() => clearSeat(seatIndex)}
                                     className='mt-1 cursor-pointer rounded-full bg-white px-2 py-0.5 text-[10px] text-stone-500 hover:text-rose-600'
                                   >

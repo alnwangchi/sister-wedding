@@ -6,7 +6,7 @@ import { GuestSideIcon } from '@/components/guest-side-icon';
 import { Button } from '@/components/ui/button';
 
 export type SideFilter = 'groom' | 'bride';
-export type RelationshipTagFilter = 'classmate' | 'colleague' | 'friend';
+export type RelationshipTagFilter = 'classmate' | 'colleague' | 'friend' | 'relative';
 export type BinaryFilter = 'yes' | 'no';
 
 type RsvpFiltersPanelProps = {
@@ -96,7 +96,7 @@ export function RsvpFiltersPanel({
             label='吃素'
             options={[
               { value: 'yes', label: '素食' },
-              { value: 'no', label: '不素' },
+              { value: 'no', label: '葷食' },
             ]}
             selectedValues={selectedVegetarianStatus}
             onToggle={onToggleVegetarianStatus}
@@ -134,6 +134,7 @@ export function RsvpFiltersPanel({
               { value: 'classmate', label: '同學' },
               { value: 'colleague', label: '同事' },
               { value: 'friend', label: '朋友' },
+              { value: 'relative', label: '親戚' },
             ]}
             selectedValues={selectedRelationshipTags}
             onToggle={onToggleRelationshipTag}

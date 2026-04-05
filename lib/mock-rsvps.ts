@@ -26,7 +26,7 @@ export const mockRsvps: RsvpRecord[] = Array.from({ length: 30 }, (_, index) => 
     email: `guest${String(number).padStart(2, "0")}@example.com`,
     vegetarian: attending ? (["none", "vegetarian", "vegan", "other"] as const)[index % 4] : null,
     side: index % 2 === 0 ? "groom" : "bride",
-    relationshipTag: (["classmate", "colleague", "friend"] as const)[index % 3],
+    relationshipTag: (["classmate", "colleague", "friend", "relative"] as const)[index % 4],
     isSingle: index % 2 === 0,
     needsPaperInvitation,
     mailingAddress: needsPaperInvitation ? `台北市信義區松仁路 ${number} 號 ${number} 樓` : "",

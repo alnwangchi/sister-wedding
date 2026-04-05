@@ -36,7 +36,12 @@ export async function POST(request: Request) {
       vegetarian: parsed.data.vegetarian,
       side: parsed.data.side,
       relationshipTag: parsed.data.relationshipTag,
-      isSingle: parsed.data.isSingle === "yes",
+      isSingle:
+        parsed.data.isSingle === "yes"
+          ? true
+          : parsed.data.isSingle === "no"
+            ? false
+            : null,
       needsPaperInvitation: parsed.data.needsPaperInvitation === "yes",
       mailingAddress: parsed.data.mailingAddress,
       message: parsed.data.message,

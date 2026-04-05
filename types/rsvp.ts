@@ -1,6 +1,6 @@
 export type AttendanceSide = "groom" | "bride";
 export type VegetarianOption = "none" | "vegetarian" | "vegan" | "other";
-export type RelationshipTag = "classmate" | "colleague" | "friend";
+export type RelationshipTag = "classmate" | "colleague" | "friend" | "relative";
 
 export type RsvpRecord = {
   id: string;
@@ -12,7 +12,8 @@ export type RsvpRecord = {
   vegetarian: VegetarianOption | null;
   side: AttendanceSide;
   relationshipTag: RelationshipTag;
-  isSingle: boolean;
+  /** null 表示來賓未填寫 */
+  isSingle: boolean | null;
   needsPaperInvitation: boolean;
   mailingAddress: string;
   message: string;

@@ -10,7 +10,7 @@ const adminCreateSchema = z.object({
   side: z.enum(["groom", "bride"], {
     error: "請選擇男方或女方",
   }),
-  relationshipTag: z.enum(["classmate", "colleague", "friend"], {
+  relationshipTag: z.enum(["classmate", "colleague", "friend", "relative"], {
     error: "請選擇關係標籤",
   }),
 });
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       vegetarian: parsed.data.vegetarian ? "vegetarian" : "none",
       side: parsed.data.side,
       relationshipTag: parsed.data.relationshipTag,
-      isSingle: false,
+      isSingle: null,
       needsPaperInvitation: false,
       mailingAddress: "",
       message: "",
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         vegetarian: parsed.data.vegetarian ? "vegetarian" : "none",
         side: parsed.data.side,
         relationshipTag: parsed.data.relationshipTag,
-        isSingle: false,
+        isSingle: null,
         needsPaperInvitation: false,
         mailingAddress: "",
         message: "",
