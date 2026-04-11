@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { RSVP_DRAFT_STORAGE_KEY } from "@/lib/rsvp-draft";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { rsvpSchema, type RsvpFormValues } from "@/schemas/rsvp";
 
@@ -31,7 +32,7 @@ const relationshipTagLabels = {
   classmate: "同學",
   colleague: "同事",
   friend: "朋友",
-  relative: "親戚",
+  relative: "家人",
 } as const;
 
 const paperInvitationLabels = {
@@ -152,7 +153,11 @@ export function RsvpConfirmation() {
             label="吃素需求"
             value={draft.attending === "no" ? "不適用" : vegetarianLabels[draft.vegetarian ?? "none"]}
           />
-          <Field label="男方或女方親友" value={sideLabels[draft.side]} />
+          <Field
+            label="男方或女方親友"
+            value={sideLabels[draft.side]}
+            valueClassName={draft.side === "bride" ? "font-medium text-bride" : undefined}
+          />
           <Field label="關係標籤" value={relationshipTagLabels[draft.relationshipTag]} />
           <Field
             label="是否單身"
@@ -206,15 +211,17 @@ function Field({
   label,
   value,
   isLast = false,
+  valueClassName,
 }: {
   label: string;
   value: string;
   isLast?: boolean;
+  valueClassName?: string;
 }) {
   return (
     <div className={`grid gap-2 px-5 py-4 sm:grid-cols-[10rem_1fr] sm:gap-4 ${isLast ? "" : "border-b border-rose-100"}`}>
       <p className="text-sm font-semibold text-stone-600">{label}</p>
-      <p className="text-sm leading-7 text-stone-700">{value}</p>
+      <p className={cn("text-sm leading-7", valueClassName ?? "text-stone-700")}>{value}</p>
     </div>
   );
 }

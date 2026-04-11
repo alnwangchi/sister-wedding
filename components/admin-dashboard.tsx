@@ -1,11 +1,22 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Carrot, CircleCheck, CircleX, Copy, Plus, Trash2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  Copy,
+  Mail,
+  Phone,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import type { RelationshipTag, RsvpRecord } from '@/types/rsvp';
-import { GuestSideIcon, GuestSideLabel } from '@/components/guest-side-icon';
+import { GuestSideLabel } from '@/components/guest-side-icon';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -32,6 +43,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 const tabs = [
   { id: 'responses', label: '賓客回覆' },
@@ -39,6 +52,45 @@ const tabs = [
 ] as const;
 
 const PAGE_SIZE = 20;
+
+const MESSAGE_CELL_HEIGHT_CLASS = 'h-[2.875rem]';
+
+function MessageTableCell({ message }: { message: string }) {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return (
+      <div
+        className={cn(MESSAGE_CELL_HEIGHT_CLASS, 'flex max-w-[16rem] items-center text-stone-400')}
+      >
+        —
+      </div>
+    );
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type='button'
+          className={cn(
+            MESSAGE_CELL_HEIGHT_CLASS,
+            'min-w-0 w-full max-w-[16rem] rounded-md border-0 bg-transparent p-0 text-left text-sm leading-relaxed text-stone-700 outline-offset-2 transition-colors hover:bg-rose-50/50 focus-visible:ring-2 focus-visible:ring-rose-200',
+          )}
+        >
+          <span className='line-clamp-2 break-words'>{trimmed}</span>
+          <span className='sr-only'>完整留言於提示中</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        side='top'
+        align='start'
+        className='max-w-[200px] max-h-[min(60vh,24rem)] overflow-y-auto whitespace-pre-wrap'
+      >
+        {trimmed}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 function CopyableTableCell({ rawText, copyLabel }: { rawText: string; copyLabel: string }) {
   const trimmed = rawText.trim();
@@ -68,6 +120,50 @@ function CopyableTableCell({ rawText, copyLabel }: { rawText: string; copyLabel:
         <span className='sr-only'>{copyLabel}</span>
       </Button>
     </div>
+  );
+}
+
+function CollapsibleContactColumnHead({
+  label,
+  expanded,
+  onToggle,
+  icon: Icon,
+  expandLabel,
+  collapseLabel,
+}: {
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  icon: LucideIcon;
+  expandLabel: string;
+  collapseLabel: string;
+}) {
+  return (
+    <TableHead className={cn(expanded ? '' : 'w-fit px-1')}>
+      <button
+        type='button'
+        className={cn(
+          'flex w-full cursor-pointer items-center justify-center gap-0.5 rounded-md font-medium text-stone-500 transition hover:bg-rose-50/80 hover:text-stone-800',
+          'flex-row px-1 py-1',
+        )}
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-label={expanded ? collapseLabel : expandLabel}
+        title={expanded ? collapseLabel : expandLabel}
+      >
+        {expanded ? (
+          <>
+            <span className='whitespace-nowrap'>{label}</span>
+            <ChevronLeft aria-hidden='true' className='size-4 shrink-0 opacity-70' />
+          </>
+        ) : (
+          <>
+            <Icon aria-hidden='true' className='size-4 shrink-0 opacity-80' />
+            <ChevronRight aria-hidden='true' className='size-4 shrink-0 opacity-70' />
+          </>
+        )}
+      </button>
+    </TableHead>
   );
 }
 
@@ -118,6 +214,8 @@ export function AdminDashboard({
   const [localRecords, setLocalRecords] = useState(records);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDeleteRecord, setPendingDeleteRecord] = useState<RsvpRecord | null>(null);
+  const [showPhoneColumn, setShowPhoneColumn] = useState(true);
+  const [showEmailColumn, setShowEmailColumn] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newGuestName, setNewGuestName] = useState('');
   const [newGuestVegetarian, setNewGuestVegetarian] = useState(false);
@@ -555,12 +653,26 @@ export function AdminDashboard({
                   <TableHeader>
                     <TableRow className='border-rose-100 hover:bg-transparent'>
                       <TableHead className='whitespace-nowrap'>姓名</TableHead>
-                      <TableHead>電話</TableHead>
+                      <CollapsibleContactColumnHead
+                        label='電話'
+                        expanded={showPhoneColumn}
+                        onToggle={() => setShowPhoneColumn((v) => !v)}
+                        icon={Phone}
+                        expandLabel='展開電話欄'
+                        collapseLabel='收合電話欄'
+                      />
                       <TableHead>參加</TableHead>
                       <TableHead>人數</TableHead>
-                      <TableHead>Email</TableHead>
+                      <CollapsibleContactColumnHead
+                        label='Email'
+                        expanded={showEmailColumn}
+                        onToggle={() => setShowEmailColumn((v) => !v)}
+                        icon={Mail}
+                        expandLabel='展開 Email 欄'
+                        collapseLabel='收合 Email 欄'
+                      />
                       <TableHead>吃素</TableHead>
-                      <TableHead>親友別</TableHead>
+                      <TableHead>類別</TableHead>
                       <TableHead>關係</TableHead>
                       <TableHead>單身</TableHead>
                       <TableHead>紙帖</TableHead>
@@ -576,8 +688,12 @@ export function AdminDashboard({
                         <TableCell className='whitespace-nowrap font-medium text-stone-700'>
                           {record.name}
                         </TableCell>
-                        <TableCell>
-                          <CopyableTableCell rawText={record.phone} copyLabel='複製電話' />
+                        <TableCell
+                          className={cn(!showPhoneColumn && 'w-fit p-1')}
+                        >
+                          {showPhoneColumn ? (
+                            <CopyableTableCell rawText={record.phone} copyLabel='複製電話' />
+                          ) : null}
                         </TableCell>
                         <TableCell>
                           <span
@@ -595,20 +711,29 @@ export function AdminDashboard({
                           </span>
                         </TableCell>
                         <TableCell>{record.guestCount}</TableCell>
-                        <TableCell>
-                          <CopyableTableCell rawText={record.email} copyLabel='複製電子信箱' />
+                        <TableCell
+                          className={cn(!showEmailColumn && 'w-fit p-1')}
+                        >
+                          {showEmailColumn ? (
+                            <CopyableTableCell rawText={record.email} copyLabel='複製電子信箱' />
+                          ) : null}
                         </TableCell>
                         <TableCell>
                           {record.vegetarian === null ? (
                             '—'
-                          ) : record.vegetarian === 'none' ? (
-                            vegetarianLabel[record.vegetarian]
                           ) : (
                             <span
                               className='inline-flex items-center justify-center'
                               title={vegetarianLabel[record.vegetarian]}
                             >
-                              <Carrot aria-hidden='true' className='size-4 text-emerald-600' />
+                              {record.vegetarian === 'none' ? (
+                                <CircleX aria-hidden='true' className='size-4 text-stone-400' />
+                              ) : (
+                                <CircleCheck
+                                  aria-hidden='true'
+                                  className='size-4 text-emerald-600'
+                                />
+                              )}
                               <span className='sr-only'>{vegetarianLabel[record.vegetarian]}</span>
                             </span>
                           )}
@@ -622,13 +747,40 @@ export function AdminDashboard({
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {record.isSingle === true
-                            ? '是'
-                            : record.isSingle === false
-                              ? '否'
-                              : '—'}
+                          {record.isSingle === null ? (
+                            '—'
+                          ) : (
+                            <span
+                              className='inline-flex items-center justify-center'
+                              title={record.isSingle ? '單身' : '非單身'}
+                            >
+                              {record.isSingle ? (
+                                <CircleCheck
+                                  aria-hidden='true'
+                                  className='size-4 text-emerald-600'
+                                />
+                              ) : (
+                                <CircleX aria-hidden='true' className='size-4 text-stone-400' />
+                              )}
+                              <span className='sr-only'>{record.isSingle ? '單身' : '非單身'}</span>
+                            </span>
+                          )}
                         </TableCell>
-                        <TableCell>{record.needsPaperInvitation ? '需要' : '不需要'}</TableCell>
+                        <TableCell>
+                          <span
+                            className='inline-flex items-center justify-center'
+                            title={record.needsPaperInvitation ? '需要' : '不需要'}
+                          >
+                            {record.needsPaperInvitation ? (
+                              <CircleCheck aria-hidden='true' className='size-4 text-emerald-600' />
+                            ) : (
+                              <CircleX aria-hidden='true' className='size-4 text-stone-400' />
+                            )}
+                            <span className='sr-only'>
+                              {record.needsPaperInvitation ? '需要' : '不需要'}
+                            </span>
+                          </span>
+                        </TableCell>
                         <TableCell>
                           <CopyableTableCell
                             rawText={record.needsPaperInvitation ? record.mailingAddress : ''}
@@ -662,7 +814,9 @@ export function AdminDashboard({
                             '不適用'
                           )}
                         </TableCell>
-                        <TableCell>{record.message || '—'}</TableCell>
+                        <TableCell className='align-top'>
+                          <MessageTableCell message={record.message ?? ''} />
+                        </TableCell>
                         <TableCell className='text-center'>
                           <Button
                             type='button'
@@ -857,8 +1011,7 @@ export function AdminDashboard({
                     onChange={() => setNewGuestSide('groom')}
                     disabled={creating}
                   />
-                  <GuestSideIcon side='groom' />
-                  男方親友
+                  <GuestSideLabel side='groom' variant='full' />
                 </label>
                 <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
                   <input
@@ -869,8 +1022,7 @@ export function AdminDashboard({
                     onChange={() => setNewGuestSide('bride')}
                     disabled={creating}
                   />
-                  <GuestSideIcon side='bride' />
-                  女方親友
+                  <GuestSideLabel side='bride' variant='full' />
                 </label>
               </div>
             </div>
@@ -919,7 +1071,7 @@ export function AdminDashboard({
                     onChange={() => setNewGuestRelationshipTag('relative')}
                     disabled={creating}
                   />
-                  親戚
+                  家人
                 </label>
               </div>
             </div>
@@ -966,14 +1118,14 @@ const relationshipTagLabel = {
   classmate: '同學',
   colleague: '同事',
   friend: '朋友',
-  relative: '親戚',
+  relative: '家人',
 } as const;
 
 const relationshipTagBadgeClass = {
-  classmate: 'border-violet-200 bg-violet-50 text-violet-700',
-  colleague: 'border-cyan-200 bg-cyan-50 text-cyan-700',
-  friend: 'border-rose-200 bg-rose-50 text-rose-700',
-  relative: 'border-amber-200 bg-amber-50 text-amber-800',
+  classmate: 'whitespace-nowrap border-transparent bg-[#12CBC4] text-white',
+  colleague: 'whitespace-nowrap border-transparent bg-[#1289A7] text-white',
+  friend: 'whitespace-nowrap border-transparent bg-[#009432] text-white',
+  relative: 'whitespace-nowrap border-transparent bg-bride text-white',
 } as const;
 
 function toggleMultiSelect<T>(value: T, setter: React.Dispatch<React.SetStateAction<T[]>>) {

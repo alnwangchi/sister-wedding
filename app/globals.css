@@ -7,6 +7,12 @@
   --rose-soft: #fff1f2;
   --rose-main: #f43f5e;
   --gold-soft: #f8ede3;
+  /* 女方／新娘側主色（文字、標示等） */
+  --bride: #fda7df;
+}
+
+@theme inline {
+  --color-bride: var(--bride);
 }
 
 html {

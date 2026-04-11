@@ -1,25 +1,22 @@
-import { Mars, Venus } from 'lucide-react';
-
 export type GuestSide = 'groom' | 'bride';
 
-export function GuestSideIcon({
+const SIDE_LABEL = {
+  groom: { short: '男', full: '男方親友' },
+  bride: { short: '女', full: '女方親友' },
+} as const;
+
+export function GuestSideLabel({
   side,
-  className = 'size-4',
+  variant = 'short',
 }: {
   side: GuestSide;
-  className?: string;
+  variant?: 'short' | 'full';
 }) {
-  const colorClass = side === 'groom' ? 'text-sky-600' : 'text-pink-500';
-  const Icon = side === 'groom' ? Mars : Venus;
-  return <Icon aria-hidden='true' className={`${className} shrink-0 ${colorClass}`} />;
-}
-
-export function GuestSideLabel({ side }: { side: GuestSide }) {
-  const text = side === 'groom' ? '男方' : '女方';
+  const text = SIDE_LABEL[side][variant === 'short' ? 'short' : 'full'];
+  const colorClass = side === 'groom' ? 'text-sky-600' : 'text-bride';
   return (
-    <span className='inline-flex items-center gap-1.5' title={text}>
-      <GuestSideIcon side={side} />
-      {/* <span>{text}</span> */}
+    <span className={`font-medium ${colorClass}`} title={SIDE_LABEL[side].full}>
+      {text}
     </span>
   );
 }

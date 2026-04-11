@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react';
 
-import { GuestSideIcon } from '@/components/guest-side-icon';
 import { Button } from '@/components/ui/button';
 
 export type SideFilter = 'groom' | 'bride';
@@ -75,16 +74,10 @@ export function RsvpFiltersPanel({
       <div className='flex flex-wrap items-center gap-x-14 gap-y-2'>
         {showGroup.side ? (
           <FilterGroup
-            label='男方 / 女方'
+            label='男 / 女'
             options={[
-              {
-                value: 'groom',
-                label: '男方',
-              },
-              {
-                value: 'bride',
-                label: '女方',
-              },
+              { value: 'groom', label: '男' },
+              { value: 'bride', label: '女' },
             ]}
             selectedValues={selectedSides}
             onToggle={onToggleSide}
@@ -134,7 +127,7 @@ export function RsvpFiltersPanel({
               { value: 'classmate', label: '同學' },
               { value: 'colleague', label: '同事' },
               { value: 'friend', label: '朋友' },
-              { value: 'relative', label: '親戚' },
+              { value: 'relative', label: '家人' },
             ]}
             selectedValues={selectedRelationshipTags}
             onToggle={onToggleRelationshipTag}

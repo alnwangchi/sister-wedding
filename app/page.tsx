@@ -33,7 +33,7 @@ export default function HomePage() {
           <h1 className='mt-4 text-center text-3xl font-semibold tracking-tight text-stone-800 sm:mt-6 sm:text-5xl lg:text-6xl'>
             朱威𣽆
             <span className='mx-3 text-rose-400'> & </span>
-            王姿婷
+            <span className='text-bride'>王姿婷</span>
           </h1>
           <p className='mt-4 max-w-2xl text-center whitespace-pre-line text-sm leading-7 text-stone-600 sm:mt-6 sm:text-base sm:leading-8 lg:text-lg'>
             在日常的流轉裡，我們決定牽起彼此的手

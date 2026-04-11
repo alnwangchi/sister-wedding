@@ -247,7 +247,9 @@ export function RsvpForm() {
           </label>
           <label className={radioClassName}>
             <input type="radio" value="bride" suppressHydrationWarning {...register("side")} />
-            <span className="whitespace-normal break-words leading-5">女方親友</span>
+            <span className="whitespace-normal break-words font-medium leading-5 text-bride">
+              女方親友
+            </span>
           </label>
         </div>
       </Field>
@@ -288,7 +290,7 @@ export function RsvpForm() {
               suppressHydrationWarning
               {...register("relationshipTag")}
             />
-            <span className="whitespace-normal break-words leading-5">親戚</span>
+            <span className="whitespace-normal break-words leading-5">家人</span>
           </label>
         </div>
       </Field>
