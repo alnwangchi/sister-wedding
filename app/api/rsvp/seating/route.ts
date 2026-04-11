@@ -15,11 +15,14 @@ const tablePositionSchema = z.object({
   y: z.number().finite("桌位 Y 座標格式錯誤"),
 });
 
+const tableCategorySchema = z.enum(["groom", "bride", "other"]);
+
 const saveSeatingSchema = z.object({
   assignments: z.array(seatAssignmentSchema),
   tableCount: z.number().int().min(1, "桌數需至少 1 桌"),
   tablePositions: z.array(tablePositionSchema),
   tableNames: z.array(z.string().max(40, "單桌名稱上限 40 字")).optional(),
+  tableCategories: z.array(tableCategorySchema).optional(),
 });
 
 function normalizeTablePositions(
@@ -65,6 +68,31 @@ function normalizeTableNames(
   return [...cleaned, ...defaults.slice(cleaned.length)];
 }
 
+function normalizeTableCategories(
+  tableCategories: Array<"groom" | "bride" | "other"> | undefined,
+  tableCount: number,
+): Array<"groom" | "bride" | "other"> {
+  const defaults = (): Array<"groom" | "bride" | "other"> =>
+    Array.from({ length: tableCount }, () => "other" as const);
+  if (!tableCategories || tableCategories.length === 0) {
+    return defaults();
+  }
+
+  const cleaned = tableCategories.map((raw) =>
+    raw === "groom" || raw === "bride" ? raw : "other",
+  );
+
+  if (cleaned.length === tableCount) {
+    return cleaned;
+  }
+
+  if (cleaned.length > tableCount) {
+    return cleaned.slice(0, tableCount);
+  }
+
+  return [...cleaned, ...defaults().slice(cleaned.length)];
+}
+
 export async function PUT(request: Request) {
   try {
     if (!isFirebaseConfigured()) {
@@ -93,6 +121,7 @@ export async function PUT(request: Request) {
       tableCount,
       tablePositions: normalizeTablePositions(parsed.data.tablePositions, tableCount),
       tableNames: normalizeTableNames(parsed.data.tableNames, tableCount),
+      tableCategories: normalizeTableCategories(parsed.data.tableCategories, tableCount),
     });
 
     return NextResponse.json({ message: "success" });

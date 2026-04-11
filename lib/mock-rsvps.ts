@@ -38,6 +38,7 @@ export const mockRsvps: RsvpRecord[] = Array.from({ length: 30 }, (_, index) => 
     seatingTableCount: null,
     seatingTablePositions: null,
     seatingTableNames: null,
+    seatingTableCategories: null,
     createdAt: new Date(Date.UTC(2026, 2, 30 - index, 10, index % 60)).toISOString(),
   };
 });

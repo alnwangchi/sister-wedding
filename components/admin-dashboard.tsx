@@ -191,6 +191,7 @@ type SeatingLayoutPayload = {
   tableCount: number;
   tablePositions: Array<{ x: number; y: number }>;
   tableNames: string[];
+  tableCategories: Array<'groom' | 'bride' | 'other'>;
 };
 
 function groupSeatingAssignmentsByGuestId(assignments: SeatingAssignmentPayload[]) {
@@ -415,6 +416,7 @@ export function AdminDashboard({
           seatingTableCount: null,
           seatingTablePositions: null,
           seatingTableNames: null,
+          seatingTableCategories: null,
           createdAt: new Date().toISOString(),
         };
         setLocalRecords((prev) => [createdRecord, ...prev]);
@@ -485,6 +487,7 @@ export function AdminDashboard({
               seatingTableCount: seatingLayout.tableCount,
               seatingTablePositions: seatingLayout.tablePositions,
               seatingTableNames: seatingLayout.tableNames,
+              seatingTableCategories: seatingLayout.tableCategories,
             };
           }
 
@@ -497,6 +500,7 @@ export function AdminDashboard({
             seatingTableCount: seatingLayout.tableCount,
             seatingTablePositions: seatingLayout.tablePositions,
             seatingTableNames: seatingLayout.tableNames,
+            seatingTableCategories: seatingLayout.tableCategories,
           };
         }),
       );
@@ -511,6 +515,7 @@ export function AdminDashboard({
         tableCount: seatingLayout.tableCount,
         tablePositions: seatingLayout.tablePositions,
         tableNames: seatingLayout.tableNames,
+        tableCategories: seatingLayout.tableCategories,
       }),
     });
     const payload = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -537,6 +542,7 @@ export function AdminDashboard({
             seatingTableCount: seatingLayout.tableCount,
             seatingTablePositions: seatingLayout.tablePositions,
             seatingTableNames: seatingLayout.tableNames,
+            seatingTableCategories: seatingLayout.tableCategories,
           };
         }
 
@@ -549,6 +555,7 @@ export function AdminDashboard({
           seatingTableCount: seatingLayout.tableCount,
           seatingTablePositions: seatingLayout.tablePositions,
           seatingTableNames: seatingLayout.tableNames,
+          seatingTableCategories: seatingLayout.tableCategories,
         };
       }),
     );

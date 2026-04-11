@@ -57,6 +57,7 @@ export async function POST(request: Request) {
       seatingTableCount: null,
       seatingTablePositions: null,
       seatingTableNames: null,
+      seatingTableCategories: null,
     });
 
     return NextResponse.json({
@@ -82,6 +83,7 @@ export async function POST(request: Request) {
         seatingTableCount: null,
         seatingTablePositions: null,
         seatingTableNames: null,
+        seatingTableCategories: null,
         createdAt: new Date().toISOString(),
       },
     });

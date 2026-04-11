@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 
 import { getFirebaseDb } from "@/lib/firebase";
-import type { CreateRsvpInput, RsvpRecord } from "@/types/rsvp";
+import type { CreateRsvpInput, RsvpRecord, SeatingTableCategory } from "@/types/rsvp";
 
 const COLLECTION_NAME = "rsvps";
 const SEATING_META_REF = ["meta", "seating"] as const;
@@ -21,7 +21,35 @@ type SeatingLayoutMeta = {
   tableCount: number;
   tablePositions: Array<{ x: number; y: number }>;
   tableNames: string[];
+  tableCategories: SeatingTableCategory[];
 };
+
+function parseTableCategories(
+  value: unknown,
+  tableCount: number,
+): SeatingTableCategory[] {
+  const defaults = (): SeatingTableCategory[] =>
+    Array.from({ length: tableCount }, () => "other");
+  if (!Array.isArray(value)) {
+    return defaults();
+  }
+
+  const allowed = new Set<SeatingTableCategory>(["groom", "bride", "other"]);
+  const parsed = value.flatMap((item): SeatingTableCategory[] => {
+    if (typeof item === "string" && allowed.has(item as SeatingTableCategory)) {
+      return [item as SeatingTableCategory];
+    }
+    return [];
+  });
+
+  if (parsed.length === tableCount) {
+    return parsed;
+  }
+  if (parsed.length > tableCount) {
+    return parsed.slice(0, tableCount);
+  }
+  return [...parsed, ...defaults().slice(parsed.length)];
+}
 
 function parseSeatingMetaDoc(data: Record<string, unknown>): SeatingLayoutMeta | null {
   const tableCount = data.tableCount;
@@ -35,7 +63,9 @@ function parseSeatingMetaDoc(data: Record<string, unknown>): SeatingLayoutMeta |
     return null;
   }
 
-  return { tableCount, tablePositions, tableNames };
+  const tableCategories = parseTableCategories(data.tableCategories, tableCount);
+
+  return { tableCount, tablePositions, tableNames, tableCategories };
 }
 
 async function fetchSeatingLayoutMeta(): Promise<SeatingLayoutMeta | null> {
@@ -130,6 +160,7 @@ export async function createRsvp(input: CreateRsvpInput) {
           seatingTableCount: layoutMeta.tableCount,
           seatingTablePositions: layoutMeta.tablePositions,
           seatingTableNames: layoutMeta.tableNames,
+          seatingTableCategories: layoutMeta.tableCategories,
         }
       : {}),
     createdAt: Timestamp.now(),
@@ -171,6 +202,24 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
       }
     }
 
+    let seatingTableCategories: SeatingTableCategory[] | null = null;
+    const layoutCount = seatingTableCount ?? layoutMeta?.tableCount ?? null;
+    if (layoutCount !== null && layoutCount > 0) {
+      if (
+        Array.isArray(data.seatingTableCategories) &&
+        data.seatingTableCategories.length > 0
+      ) {
+        seatingTableCategories = parseTableCategories(
+          data.seatingTableCategories,
+          layoutCount,
+        );
+      } else if (layoutMeta) {
+        seatingTableCategories = layoutMeta.tableCategories;
+      } else {
+        seatingTableCategories = parseTableCategories(undefined, layoutCount);
+      }
+    }
+
     return {
       id: doc.id,
       name: String(data.name ?? ""),
@@ -193,6 +242,7 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
       seatingTableCount,
       seatingTablePositions,
       seatingTableNames,
+      seatingTableCategories,
       createdAt,
     };
   });
@@ -209,6 +259,7 @@ export async function saveSeatingAssignments(
     tableCount: number;
     tablePositions: Array<{ x: number; y: number }>;
     tableNames: string[];
+    tableCategories: SeatingTableCategory[];
   },
 ) {
   const db = getFirebaseDb();
@@ -242,6 +293,7 @@ export async function saveSeatingAssignments(
         seatingTableCount: seatingLayout.tableCount,
         seatingTablePositions: seatingLayout.tablePositions,
         seatingTableNames: seatingLayout.tableNames,
+        seatingTableCategories: seatingLayout.tableCategories,
       });
       return;
     }
@@ -261,6 +313,7 @@ export async function saveSeatingAssignments(
         seatingTableCount: seatingLayout.tableCount,
         seatingTablePositions: seatingLayout.tablePositions,
         seatingTableNames: seatingLayout.tableNames,
+        seatingTableCategories: seatingLayout.tableCategories,
       });
       return;
     }
@@ -269,6 +322,7 @@ export async function saveSeatingAssignments(
       seatingTableCount: seatingLayout.tableCount,
       seatingTablePositions: seatingLayout.tablePositions,
       seatingTableNames: seatingLayout.tableNames,
+      seatingTableCategories: seatingLayout.tableCategories,
     });
   });
 
@@ -278,6 +332,7 @@ export async function saveSeatingAssignments(
       tableCount: seatingLayout.tableCount,
       tablePositions: seatingLayout.tablePositions,
       tableNames: seatingLayout.tableNames,
+      tableCategories: seatingLayout.tableCategories,
       updatedAt: Timestamp.now(),
     },
     { merge: true },

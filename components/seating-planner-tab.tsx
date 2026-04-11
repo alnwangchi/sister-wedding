@@ -30,7 +30,7 @@ import {
   type ReactZoomPanPinchRef,
 } from 'react-zoom-pan-pinch';
 
-import type { RsvpRecord } from '@/types/rsvp';
+import type { RsvpRecord, SeatingTableCategory } from '@/types/rsvp';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -105,7 +105,12 @@ type SeatingPlannerTabProps = {
   filtersPanel?: ReactNode;
   onSave: (
     assignments: Array<{ id: string; seatOrder: number; seatPosition: string }>,
-    seatingLayout: { tableCount: number; tablePositions: TablePosition[]; tableNames: string[] },
+    seatingLayout: {
+      tableCount: number;
+      tablePositions: TablePosition[];
+      tableNames: string[];
+      tableCategories: SeatingTableCategory[];
+    },
   ) => Promise<void>;
 };
 
@@ -240,6 +245,52 @@ function normalizeTableNamesForSave(names: string[]): string[] {
   return resizeTableNames(names, FIXED_TABLE_COUNT);
 }
 
+function resizeTableCategories(
+  categories: SeatingTableCategory[],
+  tableCount: number,
+): SeatingTableCategory[] {
+  const allowed = new Set<SeatingTableCategory>(['groom', 'bride', 'other']);
+  const defaultsOther = (): SeatingTableCategory[] =>
+    Array.from({ length: tableCount }, () => 'other');
+
+  if (categories.length === tableCount) {
+    return categories.map((c) => (allowed.has(c) ? c : 'other'));
+  }
+  if (categories.length > tableCount) {
+    return resizeTableCategories(categories.slice(0, tableCount), tableCount);
+  }
+  return [
+    ...categories.map((c) => (allowed.has(c) ? c : 'other')),
+    ...defaultsOther().slice(categories.length),
+  ];
+}
+
+function getSavedTableCategories(records: RsvpRecord[]): SeatingTableCategory[] {
+  const source = records.find(
+    (r) => Array.isArray(r.seatingTableCategories) && r.seatingTableCategories.length > 0,
+  )?.seatingTableCategories;
+  if (!source) {
+    return Array.from({ length: FIXED_TABLE_COUNT }, () => 'other' as const);
+  }
+  return resizeTableCategories(source, FIXED_TABLE_COUNT);
+}
+
+function normalizeTableCategoriesForSave(categories: SeatingTableCategory[]): SeatingTableCategory[] {
+  return resizeTableCategories(categories, FIXED_TABLE_COUNT);
+}
+
+function tableCategoryCircleClass(category: SeatingTableCategory): string {
+  switch (category) {
+    case 'groom':
+      return 'border-sky-300 bg-sky-50';
+    case 'bride':
+      return 'border-[color:var(--bride)] bg-[color:color-mix(in_srgb,var(--bride)_14%,#fff)]';
+    case 'other':
+    default:
+      return 'border-stone-300 bg-stone-100';
+  }
+}
+
 function getSavedSeatAssignments(records: RsvpRecord[]) {
   const seats = Array.from<string | null>({
     length: FIXED_TABLE_COUNT * TABLE_CAPACITY,
@@ -288,7 +339,11 @@ function getLocalStoredTableLayout() {
     const raw = window.localStorage.getItem(SEATING_LAYOUT_STORAGE_KEY);
     if (!raw) return null;
 
-    const parsed = JSON.parse(raw) as { tablePositions?: unknown; tableNames?: unknown };
+    const parsed = JSON.parse(raw) as {
+      tablePositions?: unknown;
+      tableNames?: unknown;
+      tableCategories?: unknown;
+    };
     if (!Array.isArray(parsed.tablePositions)) return null;
 
     let tableNames: string[] | undefined;
@@ -300,6 +355,17 @@ function getLocalStoredTableLayout() {
       });
       if (rawNames.length > 0) {
         tableNames = resizeTableNames(rawNames, FIXED_TABLE_COUNT);
+      }
+    }
+
+    let tableCategories: SeatingTableCategory[] | undefined;
+    if (Array.isArray(parsed.tableCategories)) {
+      const rawCats = parsed.tableCategories.flatMap((item: unknown): SeatingTableCategory[] => {
+        if (item === 'groom' || item === 'bride' || item === 'other') return [item];
+        return [];
+      });
+      if (rawCats.length > 0) {
+        tableCategories = resizeTableCategories(rawCats, FIXED_TABLE_COUNT);
       }
     }
 
@@ -319,6 +385,7 @@ function getLocalStoredTableLayout() {
     return {
       tablePositions: resizeTablePositions(safePositions, FIXED_TABLE_COUNT),
       tableNames,
+      tableCategories,
     };
   } catch {
     return null;
@@ -329,6 +396,7 @@ function saveTableLayoutToLocalStorage(
   tableCount: number,
   tablePositions: TablePosition[],
   tableNames: string[],
+  tableCategories: SeatingTableCategory[],
 ) {
   if (typeof window === 'undefined') return;
   try {
@@ -338,6 +406,7 @@ function saveTableLayoutToLocalStorage(
         tableCount,
         tablePositions: resizeTablePositions(tablePositions, tableCount).map(clampTablePosition),
         tableNames: normalizeTableNamesForSave(tableNames),
+        tableCategories: normalizeTableCategoriesForSave(tableCategories),
       }),
     );
   } catch {
@@ -441,6 +510,12 @@ export function SeatingPlannerTab({
   const [lastSavedTableNames, setLastSavedTableNames] = useState<string[]>(() =>
     getSavedTableNames(records),
   );
+  const [tableCategories, setTableCategories] = useState<SeatingTableCategory[]>(() =>
+    getSavedTableCategories(records),
+  );
+  const [lastSavedTableCategories, setLastSavedTableCategories] = useState<SeatingTableCategory[]>(
+    () => getSavedTableCategories(records),
+  );
   const [seatAssignments, setSeatAssignments] = useState<Array<string | null>>(
     () => initialSavedAssignments,
   );
@@ -449,6 +524,7 @@ export function SeatingPlannerTab({
   );
   const [renameTableIndex, setRenameTableIndex] = useState<number | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [renameCategoryDraft, setRenameCategoryDraft] = useState<SeatingTableCategory>('other');
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
@@ -471,21 +547,26 @@ export function SeatingPlannerTab({
 
   // ── Effects ──
 
-  const hasUnsavedTableNameChanges = useMemo(
-    () => tableNames.some((n, i) => n !== lastSavedTableNames[i]),
-    [lastSavedTableNames, tableNames],
+  const hasUnsavedTableMetaChanges = useMemo(
+    () =>
+      tableNames.some((n, i) => n !== lastSavedTableNames[i]) ||
+      tableCategories.some((c, i) => c !== lastSavedTableCategories[i]),
+    [lastSavedTableCategories, lastSavedTableNames, tableCategories, tableNames],
   );
 
   useEffect(() => {
-    if (hasUnsavedTableNameChanges) return;
-    const next = getSavedTableNames(records);
+    if (hasUnsavedTableMetaChanges) return;
+    const nextNames = getSavedTableNames(records);
+    const nextCategories = getSavedTableCategories(records);
     const hasServerNames = records.some(
       (r) => Array.isArray(r.seatingTableNames) && r.seatingTableNames.length > 0,
     );
     if (!hasServerNames) return;
-    setTableNames(next);
-    setLastSavedTableNames(next);
-  }, [hasUnsavedTableNameChanges, records]);
+    setTableNames(nextNames);
+    setLastSavedTableNames(nextNames);
+    setTableCategories(nextCategories);
+    setLastSavedTableCategories(nextCategories);
+  }, [hasUnsavedTableMetaChanges, records]);
 
   useEffect(() => {
     const hasServerLayout = records.some(
@@ -502,6 +583,10 @@ export function SeatingPlannerTab({
         setTableNames(localLayout.tableNames);
         setLastSavedTableNames(localLayout.tableNames);
       }
+      if (localLayout.tableCategories) {
+        setTableCategories(localLayout.tableCategories);
+        setLastSavedTableCategories(localLayout.tableCategories);
+      }
       return;
     }
 
@@ -509,6 +594,9 @@ export function SeatingPlannerTab({
     const defaults = defaultTableNames();
     setTableNames(defaults);
     setLastSavedTableNames(defaults);
+    const defaultCats = Array.from({ length: FIXED_TABLE_COUNT }, () => 'other' as SeatingTableCategory);
+    setTableCategories(defaultCats);
+    setLastSavedTableCategories(defaultCats);
   }, [records]);
 
   useEffect(() => {
@@ -584,10 +672,10 @@ export function SeatingPlannerTab({
   );
 
   const hasUnsavedChanges = useMemo(() => {
-    if (hasUnsavedTableNameChanges) return true;
+    if (hasUnsavedTableMetaChanges) return true;
     if (seatAssignments.length !== lastSavedSeatAssignments.length) return true;
     return seatAssignments.some((id, i) => id !== lastSavedSeatAssignments[i]);
-  }, [hasUnsavedTableNameChanges, lastSavedSeatAssignments, seatAssignments]);
+  }, [hasUnsavedTableMetaChanges, lastSavedSeatAssignments, seatAssignments]);
 
   // ── Handlers ──
 
@@ -675,13 +763,17 @@ export function SeatingPlannerTab({
 
   // ── Save ──
 
-  async function persistSeating(namesForSave: string[]) {
+  async function persistSeating(
+    namesForSave: string[],
+    categoriesForSave: SeatingTableCategory[],
+  ) {
     setIsSaving(true);
     setSaveMessage('');
     setSaveError(false);
 
     try {
       const normalizedNames = normalizeTableNamesForSave(namesForSave);
+      const normalizedCategories = normalizeTableCategoriesForSave(categoriesForSave);
       const assignments = seatAssignments.flatMap((cellToken, index) => {
         if (!cellToken) return [];
         const { guestId } = parseSeatCell(cellToken);
@@ -705,10 +797,18 @@ export function SeatingPlannerTab({
         tableCount: FIXED_TABLE_COUNT,
         tablePositions: normalizedPositions,
         tableNames: normalizedNames,
+        tableCategories: normalizedCategories,
       });
-      saveTableLayoutToLocalStorage(FIXED_TABLE_COUNT, normalizedPositions, normalizedNames);
+      saveTableLayoutToLocalStorage(
+        FIXED_TABLE_COUNT,
+        normalizedPositions,
+        normalizedNames,
+        normalizedCategories,
+      );
       setTableNames(normalizedNames);
       setLastSavedTableNames(normalizedNames);
+      setTableCategories(normalizedCategories);
+      setLastSavedTableCategories(normalizedCategories);
       setLastSavedSeatAssignments([...seatAssignments]);
       setSaveMessage('座位安排已儲存。');
     } catch (error) {
@@ -721,7 +821,7 @@ export function SeatingPlannerTab({
   }
 
   async function handleSaveSeats() {
-    await persistSeating(tableNames);
+    await persistSeating(tableNames, tableCategories);
   }
 
   function exportFilenameStamp(): string {
@@ -825,12 +925,14 @@ export function SeatingPlannerTab({
 
   function openRenameTableDialog(tableIndex: number) {
     setRenameDraft(tableNames[tableIndex] ?? `第 ${tableIndex + 1} 桌`);
+    setRenameCategoryDraft(tableCategories[tableIndex] ?? 'other');
     setRenameTableIndex(tableIndex);
   }
 
   function closeRenameTableDialog() {
     setRenameTableIndex(null);
     setRenameDraft('');
+    setRenameCategoryDraft('other');
   }
 
   async function confirmRenameTable() {
@@ -839,9 +941,13 @@ export function SeatingPlannerTab({
     const fallback = `第 ${tableIndex + 1} 桌`;
     const trimmed = renameDraft.trim().slice(0, 40) || fallback;
     const nextNames = tableNames.map((n, i) => (i === tableIndex ? trimmed : n));
+    const nextCategories = tableCategories.map((c, i) =>
+      i === tableIndex ? renameCategoryDraft : c,
+    );
     setTableNames(nextNames);
+    setTableCategories(nextCategories);
     closeRenameTableDialog();
-    await persistSeating(nextNames);
+    await persistSeating(nextNames, nextCategories);
   }
 
   // ── Render ──
@@ -861,7 +967,7 @@ export function SeatingPlannerTab({
             <p className='mt-1 text-sm text-stone-500'>
               先拖拉上方賓客到下方畫布中的桌位；若回覆的參加人數大於 1，清單會出現對應數量的標籤（例如
               姓名（2/3））以便對齊總人數。每桌共 {TABLE_CAPACITY} 位，場地固定 {FIXED_TABLE_COUNT}{' '}
-              桌；點畫布上筆形圖示可為該桌命名並立即儲存。可調整畫布縮放。
+              桌；點畫布上筆形圖示可編輯該桌名稱與類別（男方／女方／其他，對應藍／女方主題色／灰）並立即儲存。可調整畫布縮放。
             </p>
           </div>
           <div className='flex items-center gap-2'>
@@ -1033,12 +1139,13 @@ export function SeatingPlannerTab({
                     const tablePosition = clampTablePosition(
                       tablePositions[tableIndex] ?? getDefaultTablePosition(tableIndex),
                     );
+                    const tableCategory = tableCategories[tableIndex] ?? 'other';
 
                     return (
                       <div key={tableNumber}>
                         {/* Table circle */}
                         <div
-                          className='absolute h-48 w-48 rounded-full border-4 border-rose-200 bg-rose-50 shadow-inner'
+                          className={`absolute h-48 w-48 rounded-full border-4 shadow-inner ${tableCategoryCircleClass(tableCategory)}`}
                           style={{
                             left: tablePosition.x + TABLE_CENTER - 96,
                             top: tablePosition.y + TABLE_CENTER - 96,
@@ -1053,13 +1160,13 @@ export function SeatingPlannerTab({
                               variant='outline'
                               size='icon'
                               data-export-ignore
-                              className='h-7 w-7 shrink-0 rounded-full border-rose-200 text-stone-600'
+                              className='h-7 w-7 shrink-0 rounded-full border-stone-200 bg-white/90 text-stone-600'
                               onPointerDown={(e) => e.stopPropagation()}
                               onClick={() => openRenameTableDialog(tableIndex)}
                               disabled={isSaving}
                             >
                               <Pencil aria-hidden='true' className='size-3.5' />
-                              <span className='sr-only'>編輯桌次名稱</span>
+                              <span className='sr-only'>編輯桌次名稱與類別</span>
                             </Button>
                           </div>
                         </div>
@@ -1151,24 +1258,76 @@ export function SeatingPlannerTab({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>編輯桌次名稱</DialogTitle>
+            <DialogTitle>編輯桌次</DialogTitle>
             <DialogDescription>
-              名稱會寫入賓客的「座位位置」欄位（例如：主桌 - 3 號位）。按儲存後會一併更新目前座位與畫布配置。
+              名稱會寫入賓客的「座位位置」欄位（例如：主桌 - 3 號位）。類別僅影響畫布上該桌的顏色標示（男方藍、女方粉、其他灰）。按儲存後會一併更新目前座位與畫布配置。
             </DialogDescription>
           </DialogHeader>
-          <div className='py-2'>
-            <label htmlFor='rename-table-input' className='sr-only'>
-              桌次名稱
-            </label>
-            <input
-              id='rename-table-input'
-              value={renameDraft}
-              onChange={(e) => setRenameDraft(e.target.value)}
-              maxLength={40}
-              disabled={isSaving}
-              className='w-full rounded-xl border border-rose-200 px-3 py-2 text-sm outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-200'
-              placeholder='例如：主桌、男方同事'
-            />
+          <div className='space-y-4 py-2'>
+            <div>
+              <label htmlFor='rename-table-input' className='mb-1.5 block text-sm font-medium text-stone-700'>
+                桌次名稱
+              </label>
+              <input
+                id='rename-table-input'
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                maxLength={40}
+                disabled={isSaving}
+                className='w-full rounded-xl border border-rose-200 px-3 py-2 text-sm outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-200'
+                placeholder='例如：主桌、男方同事'
+              />
+            </div>
+            <fieldset>
+              <legend className='mb-2 text-sm font-medium text-stone-700'>桌次類別</legend>
+              <div className='flex flex-col gap-2'>
+                <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
+                  <input
+                    type='radio'
+                    name='rename-table-category'
+                    value='groom'
+                    checked={renameCategoryDraft === 'groom'}
+                    onChange={() => setRenameCategoryDraft('groom')}
+                    disabled={isSaving}
+                    className='h-4 w-4 border-rose-300 text-sky-600 focus:ring-sky-400'
+                  />
+                  <span>
+                    <span className='font-medium text-sky-600'>男方</span>
+                    <span className='text-stone-500'>（藍色）</span>
+                  </span>
+                </label>
+                <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
+                  <input
+                    type='radio'
+                    name='rename-table-category'
+                    value='bride'
+                    checked={renameCategoryDraft === 'bride'}
+                    onChange={() => setRenameCategoryDraft('bride')}
+                    disabled={isSaving}
+                    className='h-4 w-4 border-rose-300 text-bride focus:ring-rose-400'
+                  />
+                  <span>
+                    <span className='font-medium text-bride'>女方</span>
+                    <span className='text-stone-500'>（與名單女方同色）</span>
+                  </span>
+                </label>
+                <label className='flex cursor-pointer items-center gap-3 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 transition hover:border-rose-300'>
+                  <input
+                    type='radio'
+                    name='rename-table-category'
+                    value='other'
+                    checked={renameCategoryDraft === 'other'}
+                    onChange={() => setRenameCategoryDraft('other')}
+                    disabled={isSaving}
+                    className='h-4 w-4 border-stone-300 text-stone-500 focus:ring-stone-400'
+                  />
+                  <span>
+                    <span className='font-medium text-stone-600'>其他</span>
+                    <span className='text-stone-500'>（灰色）</span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
           </div>
           <DialogFooter>
             <Button type='button' variant='outline' onClick={closeRenameTableDialog} disabled={isSaving}>
