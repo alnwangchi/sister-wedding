@@ -26,6 +26,7 @@ import {
   type SideFilter,
 } from '@/components/rsvp-filters-panel';
 import { SeatingPlannerTab } from '@/components/seating-planner-tab';
+import { WorkScheduleTab } from '@/components/work-schedule-tab';
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,7 @@ import { cn } from '@/lib/utils';
 const tabs = [
   { id: 'responses', label: '賓客回覆' },
   { id: 'seating', label: '座位安排' },
+  { id: 'schedule', label: '工作安排' },
 ] as const;
 
 const PAGE_SIZE = 20;
@@ -872,7 +874,7 @@ export function AdminDashboard({
             </div>
           )}
         </section>
-      ) : (
+      ) : activeTab === 'seating' ? (
         <SeatingPlannerTab
           records={localRecords}
           filteredGuestIds={filteredGuestIdsForSeating}
@@ -914,6 +916,8 @@ export function AdminDashboard({
             />
           }
         />
+      ) : (
+        <WorkScheduleTab usingMockData={usingMockData} />
       )}
 
       <Dialog
