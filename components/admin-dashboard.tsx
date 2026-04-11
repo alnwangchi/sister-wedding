@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import {
   ChevronLeft,
@@ -52,6 +53,17 @@ const tabs = [
   { id: 'seating', label: '座位安排' },
   { id: 'schedule', label: '工作安排' },
 ] as const;
+
+type AdminTabId = (typeof tabs)[number]['id'];
+
+const TAB_IDS: readonly AdminTabId[] = tabs.map((t) => t.id);
+
+function tabFromSearchParam(value: string | null): AdminTabId {
+  if (value && (TAB_IDS as readonly string[]).includes(value)) {
+    return value as AdminTabId;
+  }
+  return 'responses';
+}
 
 const PAGE_SIZE = 20;
 
@@ -201,7 +213,22 @@ export function AdminDashboard({
   records: RsvpRecord[];
   usingMockData: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]['id']>('responses');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeTab = useMemo(
+    () => tabFromSearchParam(searchParams.get('tab')),
+    [searchParams],
+  );
+  const setActiveTab = useCallback(
+    (id: AdminTabId) => {
+      const next = new URLSearchParams(searchParams.toString());
+      next.set('tab', id);
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSides, setSelectedSides] = useState<SideFilter[]>([]);
   const [selectedRelationshipTags, setSelectedRelationshipTags] = useState<RelationshipTagFilter[]>(

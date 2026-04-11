@@ -65,7 +65,11 @@ function parseStored(raw: string | null): WorkScheduleState | null {
     const data = JSON.parse(raw) as unknown;
     if (!data || typeof data !== 'object') return null;
     const o = data as Record<string, unknown>;
-    if (!Array.isArray(o.tasks) || !Array.isArray(o.people) || typeof o.taskAssignments !== 'object') {
+    if (
+      !Array.isArray(o.tasks) ||
+      !Array.isArray(o.people) ||
+      typeof o.taskAssignments !== 'object'
+    ) {
       return null;
     }
     const tasks: WorkScheduleState['tasks'] = [];
@@ -307,9 +311,7 @@ export function WorkScheduleTab({ usingMockData }: { usingMockData: boolean }) {
     return () => clearTimeout(timer);
   }, [state, hydrated, usingMockData]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const personById = useMemo(() => new Map(state.people.map((p) => [p.id, p])), [state.people]);
 
@@ -440,9 +442,8 @@ export function WorkScheduleTab({ usingMockData }: { usingMockData: boolean }) {
         <h2 className='text-lg font-semibold text-stone-800'>工作安排</h2>
         <p className='text-sm text-stone-500'>
           新增工作項目與人員後，將人員拖曳至對應工作區；拖回下方區域可取消分配。
-          {usingMockData ? null : (
-            <span className='mt-1 block'>變更會自動同步至 Firestore（集合 work_schedule）。</span>
-          )}
+          {usingMockData ? null : <span className='mt-1 block'>變更會自動同步</span>}
+          {/*  Firestore（集合 work_schedule） */}
         </p>
       </div>
 
@@ -541,11 +542,7 @@ export function WorkScheduleTab({ usingMockData }: { usingMockData: boolean }) {
                         if (!p) return null;
                         return (
                           <div key={pid} className='group relative'>
-                            <DraggablePersonChip
-                              personId={p.id}
-                              name={p.name}
-                              source={task.id}
-                            />
+                            <DraggablePersonChip personId={p.id} name={p.name} source={task.id} />
                             <button
                               type='button'
                               onClick={() => removePerson(p.id)}

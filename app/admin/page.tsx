@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AdminDashboard } from "@/components/admin-dashboard";
 import { AdminAuthGate } from "@/components/admin-auth-gate";
 import { isFirebaseConfigured } from "@/lib/firebase";
@@ -25,7 +26,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     <AdminAuthGate>
       <main className="px-6 py-8 sm:px-8 lg:px-12">
         <div className="mx-auto max-w-7xl">
-          <AdminDashboard records={displayRecords} usingMockData={usingMockData} />
+          <Suspense
+            fallback={
+              <div className="rounded-[2rem] border border-rose-100 bg-white/90 px-6 py-12 text-center text-sm text-stone-500 shadow-sm">
+                載入中…
+              </div>
+            }
+          >
+            <AdminDashboard records={displayRecords} usingMockData={usingMockData} />
+          </Suspense>
         </div>
       </main>
     </AdminAuthGate>

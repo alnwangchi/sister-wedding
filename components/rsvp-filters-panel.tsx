@@ -74,7 +74,7 @@ export function RsvpFiltersPanel({
       <div className='flex flex-wrap items-center gap-x-14 gap-y-2'>
         {showGroup.side ? (
           <FilterGroup
-            label='男 / 女'
+            label='男女方'
             options={[
               { value: 'groom', label: '男' },
               { value: 'bride', label: '女' },
@@ -86,7 +86,7 @@ export function RsvpFiltersPanel({
 
         {showGroup.vegetarian ? (
           <FilterGroup
-            label='吃素'
+            label='葷素'
             options={[
               { value: 'yes', label: '素食' },
               { value: 'no', label: '葷食' },
@@ -98,7 +98,7 @@ export function RsvpFiltersPanel({
 
         {showGroup.attending ? (
           <FilterGroup
-            label='是否參加'
+            label='參加'
             options={[
               { value: 'yes', label: '參加' },
               { value: 'no', label: '不參加' },
@@ -110,7 +110,7 @@ export function RsvpFiltersPanel({
 
         {showGroup.single ? (
           <FilterGroup
-            label='是否單身'
+            label='單身'
             options={[
               { value: 'yes', label: '單身' },
               { value: 'no', label: '非單身' },
@@ -122,7 +122,7 @@ export function RsvpFiltersPanel({
 
         {showGroup.relationshipTag ? (
           <FilterGroup
-            label='關係標籤'
+            label='關係'
             options={[
               { value: 'classmate', label: '同學' },
               { value: 'colleague', label: '同事' },
@@ -136,7 +136,7 @@ export function RsvpFiltersPanel({
 
         {showGroup.paperInvitation ? (
           <FilterGroup
-            label='紙本喜帖'
+            label='紙帖'
             options={[
               { value: 'yes', label: '需要' },
               { value: 'no', label: '不需要' },
