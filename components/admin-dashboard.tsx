@@ -9,6 +9,7 @@ import {
   CircleCheck,
   CircleX,
   Copy,
+  FileDown,
   Mail,
   Phone,
   Plus,
@@ -66,8 +67,131 @@ function tabFromSearchParam(value: string | null): AdminTabId {
 }
 
 const PAGE_SIZE = 20;
+const PDF_EXPORT_PAGE_SIZE = 40;
 
 const MESSAGE_CELL_HEIGHT_CLASS = 'h-[2.875rem]';
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function exportFilenameStamp(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function createRsvpExportPage({
+  records,
+  pageIndex,
+  pageCount,
+  totalCount,
+}: {
+  records: RsvpRecord[];
+  pageIndex: number;
+  pageCount: number;
+  totalCount: number;
+}) {
+  const page = document.createElement('div');
+  page.style.cssText = [
+    'width:1123px',
+    'height:794px',
+    'box-sizing:border-box',
+    'padding:28px',
+    'background:#fffaf7',
+    'color:#292524',
+    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+  ].join(';');
+
+  const header = document.createElement('div');
+  header.style.cssText =
+    'display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px';
+
+  const titleWrap = document.createElement('div');
+  const title = document.createElement('div');
+  title.textContent = '賓客回覆名單';
+  title.style.cssText = 'font-size:24px;font-weight:700;letter-spacing:.08em';
+  const subtitle = document.createElement('div');
+  subtitle.textContent = `每頁 ${PDF_EXPORT_PAGE_SIZE} 位，不含留言欄位`;
+  subtitle.style.cssText = 'margin-top:4px;font-size:12px;color:#78716c';
+  titleWrap.append(title, subtitle);
+
+  const meta = document.createElement('div');
+  meta.textContent = `第 ${pageIndex + 1} / ${pageCount} 頁，共 ${totalCount} 位`;
+  meta.style.cssText = 'font-size:12px;color:#78716c;text-align:right';
+  header.append(titleWrap, meta);
+
+  const table = document.createElement('table');
+  table.style.cssText =
+    'width:100%;border-collapse:collapse;table-layout:fixed;background:#ffffff;font-size:10.5px';
+
+  const colWidths = ['34px', '80px', '100px', '48px', '42px', '58px', '54px', '54px', '48px', '214px', '84px'];
+  const colgroup = document.createElement('colgroup');
+  for (const width of colWidths) {
+    const col = document.createElement('col');
+    col.style.width = width;
+    colgroup.append(col);
+  }
+  table.append(colgroup);
+
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  for (const label of ['#', '姓名', '電話', '參加', '人數', '吃素', '類別', '關係', '紙帖', '地址', '座位']) {
+    const th = document.createElement('th');
+    th.textContent = label;
+    th.style.cssText =
+      'border:1px solid #fecdd3;background:#fff1f2;padding:5px 4px;text-align:left;font-weight:700;color:#57534e';
+    headerRow.append(th);
+  }
+  thead.append(headerRow);
+  table.append(thead);
+
+  const tbody = document.createElement('tbody');
+  records.forEach((record, index) => {
+    const row = document.createElement('tr');
+    const values = [
+      String(pageIndex * PDF_EXPORT_PAGE_SIZE + index + 1),
+      record.name,
+      record.phone || '—',
+      record.attending ? '是' : '否',
+      String(record.guestCount),
+      record.vegetarian === null ? '—' : vegetarianLabel[record.vegetarian],
+      record.side === 'groom' ? '男方' : '女方',
+      relationshipTagLabel[record.relationshipTag],
+      record.needsPaperInvitation ? '需要' : '不需',
+      record.needsPaperInvitation ? record.mailingAddress || '—' : '—',
+      getSeatExportLabel(record),
+    ];
+
+    for (const value of values) {
+      const td = document.createElement('td');
+      td.textContent = value;
+      td.style.cssText =
+        'border:1px solid #fed7aa;padding:3px 4px;line-height:1.25;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      row.append(td);
+    }
+    tbody.append(row);
+  });
+  table.append(tbody);
+  page.append(header, table);
+
+  return page;
+}
+
+function getSeatExportLabel(record: RsvpRecord): string {
+  if (!record.attending) {
+    return '不適用';
+  }
+  if (record.seatSlots && record.seatSlots.length > 0) {
+    return record.seatSlots.map((slot) => slot.seatPosition).join('、');
+  }
+  if (record.seatAssigned) {
+    return record.seatPosition ?? '已安排';
+  }
+  return '未安排';
+}
 
 function MessageTableCell({ message }: { message: string }) {
   const trimmed = message.trim();
@@ -253,6 +377,7 @@ export function AdminDashboard({
   const [newGuestRelationshipTag, setNewGuestRelationshipTag] = useState<RelationshipTag>('friend');
   const [createError, setCreateError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [isExportingResponsesPdf, setIsExportingResponsesPdf] = useState(false);
 
   useEffect(() => {
     setLocalRecords(records);
@@ -561,6 +686,64 @@ export function AdminDashboard({
     );
   }
 
+  async function handleExportResponsesPdf() {
+    if (isExportingResponsesPdf || filteredRecordsForResponses.length === 0) {
+      return;
+    }
+
+    setIsExportingResponsesPdf(true);
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1';
+    document.body.append(host);
+
+    try {
+      const [{ toCanvas }, { jsPDF }] = await Promise.all([
+        import('html-to-image'),
+        import('jspdf'),
+      ]);
+      const pages = chunkArray(filteredRecordsForResponses, PDF_EXPORT_PAGE_SIZE);
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      for (const [pageIndex, pageRecords] of pages.entries()) {
+        const pageElement = createRsvpExportPage({
+          records: pageRecords,
+          pageIndex,
+          pageCount: pages.length,
+          totalCount: filteredRecordsForResponses.length,
+        });
+        host.replaceChildren(pageElement);
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
+          });
+        });
+
+        const canvas = await toCanvas(pageElement, {
+          pixelRatio: 2,
+          backgroundColor: '#fffaf7',
+          cacheBust: true,
+          skipAutoScale: true,
+        });
+
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, pageHeight);
+      }
+
+      pdf.save(`rsvp-responses-${exportFilenameStamp()}.pdf`);
+      toast.success(`已匯出 PDF（${filteredRecordsForResponses.length} 位）`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '匯出失敗';
+      toast.error(message);
+    } finally {
+      host.remove();
+      setIsExportingResponsesPdf(false);
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(filteredRecordsForResponses.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const currentRecords = useMemo(() => {
@@ -620,19 +803,32 @@ export function AdminDashboard({
         </div>
 
         {activeTab === 'responses' ? (
-          <Button
-            type='button'
-            size='icon'
-            onClick={() => {
-              setCreateError('');
-              setCreateDialogOpen(true);
-            }}
-            className='h-8 w-8 rounded-full'
-            title='新增賓客'
-          >
-            <Plus aria-hidden='true' className='size-4' />
-            <span className='sr-only'>新增賓客</span>
-          </Button>
+          <div className='flex items-center gap-2'>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => void handleExportResponsesPdf()}
+              disabled={filteredRecordsForResponses.length === 0 || isExportingResponsesPdf}
+              className='h-8 rounded-full border-rose-100 px-3 text-stone-600'
+              title='匯出目前篩選名單 PDF'
+            >
+              <FileDown aria-hidden='true' className='size-4' />
+              <span>{isExportingResponsesPdf ? '匯出中...' : '匯出 PDF'}</span>
+            </Button>
+            <Button
+              type='button'
+              size='icon'
+              onClick={() => {
+                setCreateError('');
+                setCreateDialogOpen(true);
+              }}
+              className='h-8 w-8 rounded-full'
+              title='新增賓客'
+            >
+              <Plus aria-hidden='true' className='size-4' />
+              <span className='sr-only'>新增賓客</span>
+            </Button>
+          </div>
         ) : null}
       </div>
 
