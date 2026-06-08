@@ -99,33 +99,34 @@ function createRsvpExportPage({
     'width:1123px',
     'height:794px',
     'box-sizing:border-box',
-    'padding:28px',
+    'padding:16px 18px',
     'background:#fffaf7',
     'color:#292524',
     'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'overflow:hidden',
   ].join(';');
 
   const header = document.createElement('div');
   header.style.cssText =
-    'display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px';
+    'display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:8px';
 
   const titleWrap = document.createElement('div');
   const title = document.createElement('div');
   title.textContent = '賓客回覆名單';
-  title.style.cssText = 'font-size:24px;font-weight:700;letter-spacing:.08em';
+  title.style.cssText = 'font-size:18px;font-weight:700;letter-spacing:.06em;line-height:1.15';
   const subtitle = document.createElement('div');
   subtitle.textContent = `每頁 ${PDF_EXPORT_PAGE_SIZE} 位，不含留言欄位`;
-  subtitle.style.cssText = 'margin-top:4px;font-size:12px;color:#78716c';
+  subtitle.style.cssText = 'margin-top:2px;font-size:10px;color:#78716c;line-height:1.15';
   titleWrap.append(title, subtitle);
 
   const meta = document.createElement('div');
   meta.textContent = `第 ${pageIndex + 1} / ${pageCount} 頁，共 ${totalCount} 位`;
-  meta.style.cssText = 'font-size:12px;color:#78716c;text-align:right';
+  meta.style.cssText = 'font-size:10px;color:#78716c;text-align:right;line-height:1.15';
   header.append(titleWrap, meta);
 
   const table = document.createElement('table');
   table.style.cssText =
-    'width:100%;border-collapse:collapse;table-layout:fixed;background:#ffffff;font-size:10.5px';
+    'width:100%;border-collapse:collapse;table-layout:fixed;background:#ffffff;font-size:9px';
 
   const colWidths = ['34px', '80px', '100px', '48px', '42px', '58px', '54px', '54px', '48px', '214px', '84px'];
   const colgroup = document.createElement('colgroup');
@@ -142,7 +143,7 @@ function createRsvpExportPage({
     const th = document.createElement('th');
     th.textContent = label;
     th.style.cssText =
-      'border:1px solid #fecdd3;background:#fff1f2;padding:5px 4px;text-align:left;font-weight:700;color:#57534e';
+      'border:1px solid #fecdd3;background:#fff1f2;padding:2px 3px;text-align:left;font-weight:700;color:#57534e;line-height:1.1;height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
     headerRow.append(th);
   }
   thead.append(headerRow);
@@ -151,6 +152,7 @@ function createRsvpExportPage({
   const tbody = document.createElement('tbody');
   records.forEach((record, index) => {
     const row = document.createElement('tr');
+    row.style.height = '15px';
     const values = [
       String(pageIndex * PDF_EXPORT_PAGE_SIZE + index + 1),
       record.name,
@@ -169,7 +171,7 @@ function createRsvpExportPage({
       const td = document.createElement('td');
       td.textContent = value;
       td.style.cssText =
-        'border:1px solid #fed7aa;padding:3px 4px;line-height:1.25;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+        'border:1px solid #fed7aa;padding:1px 3px;line-height:1.1;height:15px;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
       row.append(td);
     }
     tbody.append(row);
