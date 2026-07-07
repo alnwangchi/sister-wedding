@@ -1,92 +1,135 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 
-import { RSVP_DRAFT_STORAGE_KEY } from "@/lib/rsvp-draft";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { rsvpSchema, type RsvpFormValues } from "@/schemas/rsvp";
+import { RSVP_DRAFT_STORAGE_KEY } from '@/lib/rsvp-draft';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { rsvpSchema, type RsvpFormValues } from '@/schemas/rsvp';
 
-type ConfirmationStatus = "loading" | "ready" | "submitting" | "success" | "error";
+type ConfirmationStatus = 'loading' | 'ready' | 'submitting' | 'success' | 'error';
+type DraftStatus = Extract<ConfirmationStatus, 'loading' | 'ready' | 'error'>;
+type SubmissionStatus = Extract<ConfirmationStatus, 'submitting' | 'success' | 'error'>;
+type DraftSnapshot = {
+  draft: RsvpFormValues | null;
+  status: DraftStatus;
+  message: string;
+};
 
 const attendingLabels = {
-  yes: "會參加",
-  no: "無法參加",
+  yes: '會參加',
+  no: '無法參加',
 } as const;
 
 const vegetarianLabels = {
-  none: "無",
-  vegetarian: "蛋奶素",
-  vegan: "全素",
-  other: "其他需求",
+  none: '無',
+  vegetarian: '蛋奶素',
+  vegan: '全素',
+  other: '其他需求',
 } as const;
 
 const sideLabels = {
-  groom: "男方親友",
-  bride: "女方親友",
+  groom: '男方親友',
+  bride: '女方親友',
 } as const;
 
 const relationshipTagLabels = {
-  classmate: "同學",
-  colleague: "同事",
-  friend: "朋友",
-  relative: "家人",
+  classmate: '同學',
+  colleague: '同事',
+  friend: '朋友',
+  relative: '家人',
 } as const;
 
 const paperInvitationLabels = {
-  yes: "需要",
-  no: "不需要",
+  yes: '需要',
+  no: '不需要',
 } as const;
+
+function subscribeToDraftStorage(onStoreChange: () => void) {
+  window.addEventListener('storage', onStoreChange);
+  return () => window.removeEventListener('storage', onStoreChange);
+}
+
+function getDraftStorageSnapshot() {
+  return window.sessionStorage.getItem(RSVP_DRAFT_STORAGE_KEY);
+}
+
+function getServerDraftStorageSnapshot() {
+  return undefined;
+}
+
+function parseDraftSnapshot(rawDraft: string | null | undefined): DraftSnapshot {
+  if (rawDraft === undefined) {
+    return {
+      draft: null,
+      status: 'loading',
+      message: '',
+    };
+  }
+
+  if (!rawDraft) {
+    return {
+      draft: null,
+      status: 'error',
+      message: '找不到待確認資料，請先填寫 RSVP 表單。',
+    };
+  }
+
+  try {
+    const parsedDraft = rsvpSchema.safeParse(JSON.parse(rawDraft));
+
+    if (!parsedDraft.success) {
+      return {
+        draft: null,
+        status: 'error',
+        message: '確認資料已失效，請重新填寫表單。',
+      };
+    }
+
+    return {
+      draft: parsedDraft.data,
+      status: 'ready',
+      message: '',
+    };
+  } catch {
+    return {
+      draft: null,
+      status: 'error',
+      message: '確認資料讀取失敗，請重新填寫表單。',
+    };
+  }
+}
 
 export function RsvpConfirmation() {
   const router = useRouter();
-  const [draft, setDraft] = useState<RsvpFormValues | null>(null);
-  const [status, setStatus] = useState<ConfirmationStatus>("loading");
-  const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    try {
-      const rawDraft = window.sessionStorage.getItem(RSVP_DRAFT_STORAGE_KEY);
-
-      if (!rawDraft) {
-        setStatus("error");
-        setMessage("找不到待確認資料，請先填寫 RSVP 表單。");
-        return;
-      }
-
-      const parsedDraft = rsvpSchema.safeParse(JSON.parse(rawDraft));
-
-      if (!parsedDraft.success) {
-        window.sessionStorage.removeItem(RSVP_DRAFT_STORAGE_KEY);
-        setStatus("error");
-        setMessage("確認資料已失效，請重新填寫表單。");
-        return;
-      }
-
-      setDraft(parsedDraft.data);
-      setStatus("ready");
-    } catch {
-      window.sessionStorage.removeItem(RSVP_DRAFT_STORAGE_KEY);
-      setStatus("error");
-      setMessage("確認資料讀取失敗，請重新填寫表單。");
-    }
-  }, []);
+  const rawDraft = useSyncExternalStore(
+    subscribeToDraftStorage,
+    getDraftStorageSnapshot,
+    getServerDraftStorageSnapshot,
+  );
+  const draftSnapshot = useMemo(() => parseDraftSnapshot(rawDraft), [rawDraft]);
+  const [submissionState, setSubmissionState] = useState<{
+    status: SubmissionStatus;
+    message: string;
+  } | null>(null);
+  const draft = draftSnapshot.draft;
+  const status = submissionState?.status ?? draftSnapshot.status;
+  const message = submissionState?.message ?? draftSnapshot.message;
 
   const handleConfirmSubmit = async () => {
     if (!draft) {
       return;
     }
 
-    setStatus("submitting");
-    setMessage("");
+    setSubmissionState({ status: 'submitting', message: '' });
 
     try {
-      const response = await fetch("/api/rsvp", {
-        method: "POST",
+      const response = await fetch('/api/rsvp', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(draft),
       });
@@ -94,17 +137,23 @@ export function RsvpConfirmation() {
       const result = (await response.json()) as { message?: string };
 
       if (!response.ok) {
-        setStatus("error");
-        setMessage(result.message ?? "送出失敗，請稍後再試。");
+        setSubmissionState({
+          status: 'error',
+          message: result.message ?? '送出失敗，請稍後再試。',
+        });
         return;
       }
 
       window.sessionStorage.removeItem(RSVP_DRAFT_STORAGE_KEY);
-      setStatus("success");
-      setMessage("已收到你的回覆，謝謝你的祝福與參與。");
+      setSubmissionState({
+        status: 'success',
+        message: '已收到你的回覆，謝謝你的祝福與參與。',
+      });
     } catch {
-      setStatus("error");
-      setMessage("送出失敗，請確認網路連線後再試。");
+      setSubmissionState({
+        status: 'error',
+        message: '送出失敗，請確認網路連線後再試。',
+      });
     }
   };
 
@@ -114,93 +163,94 @@ export function RsvpConfirmation() {
       return;
     }
 
-    router.push("/rsvp");
+    router.push('/rsvp');
   };
 
-  if (status === "loading") {
-    return <p className="text-sm text-stone-500">載入確認資料中...</p>;
+  if (status === 'loading') {
+    return <p className='text-sm text-stone-500'>載入確認資料中...</p>;
   }
 
-  if (status === "error" && !draft) {
+  if (status === 'error' && !draft) {
     return (
-      <div className="space-y-4">
-        <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{message}</p>
-        <Button asChild variant="outline" className="h-auto rounded-full px-6 py-3">
-          <Link href="/rsvp">返回 RSVP 表單</Link>
+      <div className='space-y-4'>
+        <p className='rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700'>{message}</p>
+        <Button asChild variant='outline' className='h-auto rounded-full px-6 py-3'>
+          <Link href='/rsvp'>返回 RSVP 表單</Link>
         </Button>
       </div>
     );
   }
 
-  if (status === "success") {
+  if (status === 'success') {
     return (
-      <div className="rounded-3xl border border-emerald-100 bg-emerald-50 px-6 py-10 text-center">
-        <p className="text-lg font-semibold text-emerald-700">已收到您的回覆，謝謝您的祝福與參與。</p>
+      <div className='rounded-3xl border border-emerald-100 bg-emerald-50 px-6 py-10 text-center'>
+        <p className='text-lg font-semibold text-emerald-700'>
+          已收到您的回覆，謝謝您的祝福與參與。
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className='space-y-6'>
       {draft ? (
-        <div className="overflow-hidden rounded-3xl border border-rose-100 bg-white">
-          <Field label="姓名" value={draft.name} />
-          <Field label="電話" value={draft.phone} />
-          <Field label="是否參加" value={attendingLabels[draft.attending]} />
-          <Field label="參加人數" value={String(draft.guestCount)} />
-          <Field label="電子信箱" value={draft.email} />
+        <div className='overflow-hidden rounded-3xl border border-rose-100 bg-white'>
+          <Field label='姓名' value={draft.name} />
+          <Field label='電話' value={draft.phone} />
+          <Field label='是否參加' value={attendingLabels[draft.attending]} />
+          <Field label='參加人數' value={String(draft.guestCount)} />
+          <Field label='電子信箱' value={draft.email} />
           <Field
-            label="吃素需求"
-            value={draft.attending === "no" ? "不適用" : vegetarianLabels[draft.vegetarian ?? "none"]}
-          />
-          <Field
-            label="男方或女方親友"
-            value={sideLabels[draft.side]}
-            valueClassName={draft.side === "bride" ? "font-medium text-bride" : undefined}
-          />
-          <Field label="關係標籤" value={relationshipTagLabels[draft.relationshipTag]} />
-          <Field
-            label="是否單身"
+            label='吃素需求'
             value={
-              draft.isSingle === "yes" ? "是" : draft.isSingle === "no" ? "否" : "未填寫"
+              draft.attending === 'no' ? '不適用' : vegetarianLabels[draft.vegetarian ?? 'none']
             }
           />
-          <Field label="是否需要紙本喜帖" value={paperInvitationLabels[draft.needsPaperInvitation]} />
+          <Field label='男方或女方親友' value={sideLabels[draft.side]} />
+          <Field label='關係標籤' value={relationshipTagLabels[draft.relationshipTag]} />
           <Field
-            label="收件地址"
-            value={draft.needsPaperInvitation === "yes" ? draft.mailingAddress : "不適用"}
+            label='是否單身'
+            value={draft.isSingle === 'yes' ? '是' : draft.isSingle === 'no' ? '否' : '未填寫'}
           />
-          <Field label="想說的話" value={draft.message || "（未填寫）"} isLast />
+          <Field
+            label='是否需要紙本喜帖'
+            value={paperInvitationLabels[draft.needsPaperInvitation]}
+          />
+          <Field
+            label='收件地址'
+            value={draft.needsPaperInvitation === 'yes' ? draft.mailingAddress : '不適用'}
+          />
+          <Field label='想說的話' value={draft.message || '（未填寫）'} isLast />
         </div>
       ) : null}
 
       {message ? (
         <p
           className={`rounded-2xl px-4 py-3 text-sm ${
-            status === "error" ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+            status === 'error' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
           }`}
         >
           {message}
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className='flex flex-col gap-3 sm:flex-row'>
         <Button
-          type="button"
-          variant="outline"
+          type='button'
+          variant='outline'
           onClick={handleGoBack}
-          disabled={status === "submitting"}
-          className="h-auto flex-1 rounded-full px-6 py-3"
+          disabled={status === 'submitting'}
+          className='h-auto flex-1 rounded-full px-6 py-3'
         >
           回上一頁
         </Button>
         <Button
-          type="button"
+          type='button'
           onClick={handleConfirmSubmit}
-          disabled={status === "submitting"}
-          className="h-auto flex-1 rounded-full px-6 py-3 disabled:bg-rose-300"
+          disabled={status === 'submitting'}
+          className='h-auto flex-1 rounded-full px-6 py-3 disabled:bg-rose-300'
         >
-          {status === "submitting" ? "送出中..." : "確認送出"}
+          {status === 'submitting' ? '送出中...' : '確認送出'}
         </Button>
       </div>
     </div>
@@ -219,9 +269,13 @@ function Field({
   valueClassName?: string;
 }) {
   return (
-    <div className={`grid gap-2 px-5 py-4 sm:grid-cols-[10rem_1fr] sm:gap-4 ${isLast ? "" : "border-b border-rose-100"}`}>
-      <p className="text-sm font-semibold text-stone-600">{label}</p>
-      <p className={cn("text-sm leading-7", valueClassName ?? "text-stone-700")}>{value}</p>
+    <div
+      className={`grid gap-2 px-5 py-4 sm:grid-cols-[10rem_1fr] sm:gap-4 ${
+        isLast ? '' : 'border-b border-rose-100'
+      }`}
+    >
+      <p className='text-sm font-semibold text-stone-600'>{label}</p>
+      <p className={cn('text-sm leading-7', valueClassName ?? 'text-stone-700')}>{value}</p>
     </div>
   );
 }

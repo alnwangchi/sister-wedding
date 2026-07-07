@@ -24,7 +24,7 @@ export const rsvpSchema = z
     relationshipTag: z.enum(['classmate', 'colleague', 'friend', 'relative'], {
       error: '請選擇關係標籤',
     }),
-    isSingle: z.enum(['yes', 'no']).optional(),
+    isSingle: z.enum(['yes', 'no']).optional().catch(undefined),
     needsPaperInvitation: z
       .enum(['yes', 'no'], {
         error: '請選擇是否需要紙本喜帖',

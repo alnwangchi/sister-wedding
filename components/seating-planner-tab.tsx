@@ -192,6 +192,38 @@ function getDefaultTablePosition(tableIndex: number): TablePosition {
   return { x: col * CELL, y: row * CELL };
 }
 
+function getTablePosition(
+  tablePositions: TablePosition[],
+  tableIndex: number,
+): TablePosition {
+  return clampTablePosition(tablePositions[tableIndex] ?? getDefaultTablePosition(tableIndex));
+}
+
+function getViewOnlyTablePosition(
+  tablePositions: TablePosition[],
+  tableNames: string[],
+  tableIndex: number,
+): TablePosition | null {
+  const customsTableIndexes = tableNames.flatMap((name, index) =>
+    name.trim() === '海關' ? [index] : [],
+  );
+  if (customsTableIndexes.length < 2) return null;
+
+  const customsTables = customsTableIndexes
+    .map((index) => ({ index, position: getTablePosition(tablePositions, index) }))
+    .sort((a, b) => a.position.x - b.position.x);
+  const leftCustomsTable = customsTables[0];
+  const rightCustomsTable = customsTables[customsTables.length - 1];
+  if (!leftCustomsTable || !rightCustomsTable || tableIndex !== leftCustomsTable.index) {
+    return null;
+  }
+
+  return clampTablePosition({
+    x: rightCustomsTable.position.x,
+    y: rightCustomsTable.position.y + CELL,
+  });
+}
+
 function resizeTablePositions(positions: TablePosition[], tableCount: number): TablePosition[] {
   if (positions.length === tableCount) return positions;
   if (positions.length > tableCount) return positions.slice(0, tableCount);
@@ -1136,9 +1168,9 @@ export function SeatingPlannerTab({
                   >
                   {Array.from({ length: FIXED_TABLE_COUNT }, (_, tableIndex) => {
                     const tableNumber = tableIndex + 1;
-                    const tablePosition = clampTablePosition(
-                      tablePositions[tableIndex] ?? getDefaultTablePosition(tableIndex),
-                    );
+                    const tablePosition =
+                      getViewOnlyTablePosition(tablePositions, tableNames, tableIndex) ??
+                      getTablePosition(tablePositions, tableIndex);
                     const tableCategory = tableCategories[tableIndex] ?? 'other';
 
                     return (
