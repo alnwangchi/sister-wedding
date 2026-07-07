@@ -62,6 +62,9 @@ const FIXED_CANVAS_WIDTH = 3900;
 const FIXED_CANVAS_HEIGHT = 1800;
 /** 畫布外圈留白（px），放大平移時邊界仍保留可視邊距，避免內容貼死視窗 */
 const CANVAS_PAN_GUTTER = 96;
+const DEFAULT_EXPORT_IMAGE_WIDTH = FIXED_CANVAS_WIDTH * 2;
+const MIN_EXPORT_IMAGE_WIDTH = FIXED_CANVAS_WIDTH;
+const MAX_EXPORT_IMAGE_WIDTH = 12000;
 const SEATING_LAYOUT_STORAGE_KEY = 'wedding-rsvp-seating-layout';
 
 /** 座位格內儲存「賓客＋同行第幾位」，與可拖曳項 id 一致；舊資料僅存 guestId */
@@ -90,6 +93,31 @@ function partySeatCount(r: RsvpRecord): number {
   const n = Math.floor(Number(r.guestCount));
   if (Number.isFinite(n) && n >= 1) return n;
   return 1;
+}
+
+function clampExportImageWidth(width: number): number {
+  if (!Number.isFinite(width)) return DEFAULT_EXPORT_IMAGE_WIDTH;
+  return Math.min(MAX_EXPORT_IMAGE_WIDTH, Math.max(MIN_EXPORT_IMAGE_WIDTH, Math.round(width)));
+}
+
+function getExportImageHeight(width: number): number {
+  return Math.round((width / FIXED_CANVAS_WIDTH) * FIXED_CANVAS_HEIGHT);
+}
+
+function getExportPixelRatio(width: number): number {
+  return width / FIXED_CANVAS_WIDTH;
+}
+
+function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+        return;
+      }
+      reject(new Error('無法建立圖片檔案'));
+    }, 'image/png');
+  });
 }
 
 // ─── Types ───────────────────────────────────────────────────
@@ -562,6 +590,9 @@ export function SeatingPlannerTab({
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState(DEFAULT_ZOOM);
+  const [exportImageWidthInput, setExportImageWidthInput] = useState(
+    String(DEFAULT_EXPORT_IMAGE_WIDTH),
+  );
   const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
   const [isCanvasPointerDown, setIsCanvasPointerDown] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -690,6 +721,12 @@ export function SeatingPlannerTab({
   const seatedCount = seatAssignments.filter((t) => t !== null).length;
   const totalSeats = FIXED_TABLE_COUNT * TABLE_CAPACITY;
   const zoomPercent = Math.round(canvasZoom * 100);
+  const exportImageWidth = useMemo(
+    () => clampExportImageWidth(Number(exportImageWidthInput)),
+    [exportImageWidthInput],
+  );
+  const exportImageHeight = useMemo(() => getExportImageHeight(exportImageWidth), [exportImageWidth]);
+  const exportPixelRatio = useMemo(() => getExportPixelRatio(exportImageWidth), [exportImageWidth]);
 
   const handleCanvasWrapperPointerDown = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
@@ -860,7 +897,7 @@ export function SeatingPlannerTab({
     return new Date().toISOString().slice(0, 10);
   }
 
-  async function captureSeatingLayoutCanvas(): Promise<HTMLCanvasElement> {
+  async function captureSeatingLayoutCanvas(pixelRatio = 2): Promise<HTMLCanvasElement> {
     const el = exportCanvasRef.current;
     if (!el) {
       throw new Error('找不到畫布');
@@ -884,7 +921,7 @@ export function SeatingPlannerTab({
     try {
       const { toCanvas } = await import('html-to-image');
       return await toCanvas(el, {
-        pixelRatio: 2,
+        pixelRatio,
         backgroundColor: '#fdf2f8',
         cacheBust: true,
         skipAutoScale: true,
@@ -904,13 +941,16 @@ export function SeatingPlannerTab({
     if (isExporting) return;
     setIsExporting(true);
     try {
-      const canvas = await captureSeatingLayoutCanvas();
+      const canvas = await captureSeatingLayoutCanvas(exportPixelRatio);
       const stamp = exportFilenameStamp();
+      const blob = await canvasToPngBlob(canvas);
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.download = `seating-plan-${stamp}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.download = `seating-plan-${stamp}-${exportImageWidth}x${exportImageHeight}.png`;
+      link.href = url;
       link.click();
-      toast.success('已匯出圖片');
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast.success(`已匯出圖片（${exportImageWidth} × ${exportImageHeight} px）`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : '匯出失敗';
       toast.error(msg);
@@ -1060,6 +1100,25 @@ export function SeatingPlannerTab({
         <div className='mt-6'>
           <div className='mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500'>
             <div className='flex flex-wrap items-center gap-2'>
+              <label className='flex items-center gap-2 rounded-full border border-rose-100 bg-white px-3 py-1.5 text-xs text-stone-600'>
+                <span>圖片寬度</span>
+                <input
+                  type='number'
+                  min={MIN_EXPORT_IMAGE_WIDTH}
+                  max={MAX_EXPORT_IMAGE_WIDTH}
+                  step={100}
+                  value={exportImageWidthInput}
+                  onChange={(e) => setExportImageWidthInput(e.target.value)}
+                  onBlur={() => setExportImageWidthInput(String(exportImageWidth))}
+                  disabled={isExporting}
+                  className='h-6 w-24 rounded-full border border-rose-100 px-2 text-right text-xs text-stone-700 outline-none focus:border-rose-300 focus:ring-2 focus:ring-rose-100 disabled:opacity-60'
+                  aria-label='圖片輸出寬度 px'
+                />
+                <span>px</span>
+              </label>
+              <span className='text-xs text-stone-400'>
+                輸出 {exportImageWidth} × {exportImageHeight} px
+              </span>
               <Button
                 type='button'
                 variant='outline'
