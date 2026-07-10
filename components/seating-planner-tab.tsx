@@ -65,6 +65,10 @@ const CANVAS_PAN_GUTTER = 96;
 const DEFAULT_EXPORT_IMAGE_WIDTH = FIXED_CANVAS_WIDTH * 2;
 const MIN_EXPORT_IMAGE_WIDTH = FIXED_CANVAS_WIDTH;
 const MAX_EXPORT_IMAGE_WIDTH = 12000;
+const CUSTOMS_ANCHOR_TABLE_NUMBER = 15;
+const CUSTOMS_MOVED_TABLE_NUMBER = 16;
+const CUSTOMS_ANCHOR_TABLE_INDEX = CUSTOMS_ANCHOR_TABLE_NUMBER - 1;
+const CUSTOMS_MOVED_TABLE_INDEX = CUSTOMS_MOVED_TABLE_NUMBER - 1;
 const SEATING_LAYOUT_STORAGE_KEY = 'wedding-rsvp-seating-layout';
 
 /** 座位格內儲存「賓客＋同行第幾位」，與可拖曳項 id 一致；舊資料僅存 guestId */
@@ -227,28 +231,64 @@ function getTablePosition(
   return clampTablePosition(tablePositions[tableIndex] ?? getDefaultTablePosition(tableIndex));
 }
 
-function getViewOnlyTablePosition(
+function tableNameMatchesNumber(name: string, tableNumber: number): boolean {
+  const normalized = name.replace(/\s+/g, '');
+  const chineseNumber = tableNumber === 15 ? '十五' : tableNumber === 16 ? '十六' : '';
+  const arabicNumberPattern = new RegExp(`(^|\\D)${tableNumber}(\\D|$)`);
+  return (
+    arabicNumberPattern.test(normalized) ||
+    (chineseNumber.length > 0 && normalized.includes(chineseNumber))
+  );
+}
+
+function findNamedCustomsTableIndex(tableNames: string[], tableNumber: number): number | null {
+  const index = tableNames.findIndex((name) => {
+    const normalized = name.trim();
+    return normalized.includes('海關') && tableNameMatchesNumber(normalized, tableNumber);
+  });
+  return index >= 0 ? index : null;
+}
+
+function getFixedCustomsTablePosition(
   tablePositions: TablePosition[],
   tableNames: string[],
   tableIndex: number,
 ): TablePosition | null {
-  const customsTableIndexes = tableNames.flatMap((name, index) =>
-    name.trim() === '海關' ? [index] : [],
-  );
-  if (customsTableIndexes.length < 2) return null;
+  const anchorTableIndex =
+    findNamedCustomsTableIndex(tableNames, CUSTOMS_ANCHOR_TABLE_NUMBER) ??
+    CUSTOMS_ANCHOR_TABLE_INDEX;
+  const movedTableIndex =
+    findNamedCustomsTableIndex(tableNames, CUSTOMS_MOVED_TABLE_NUMBER) ??
+    CUSTOMS_MOVED_TABLE_INDEX;
 
-  const customsTables = customsTableIndexes
-    .map((index) => ({ index, position: getTablePosition(tablePositions, index) }))
-    .sort((a, b) => a.position.x - b.position.x);
-  const leftCustomsTable = customsTables[0];
-  const rightCustomsTable = customsTables[customsTables.length - 1];
-  if (!leftCustomsTable || !rightCustomsTable || tableIndex !== leftCustomsTable.index) {
+  if (anchorTableIndex === movedTableIndex) {
     return null;
   }
 
+  if (tableIndex !== movedTableIndex) {
+    return null;
+  }
+
+  const anchorName = tableNames[anchorTableIndex]?.trim() ?? '';
+  const movedName = tableNames[movedTableIndex]?.trim() ?? '';
+  if (!anchorName.includes('海關') || !movedName.includes('海關')) {
+    return null;
+  }
+
+  const anchorPosition = getTablePosition(tablePositions, anchorTableIndex);
   return clampTablePosition({
-    x: rightCustomsTable.position.x,
-    y: rightCustomsTable.position.y + CELL,
+    x: anchorPosition.x,
+    y: anchorPosition.y + CELL,
+  });
+}
+
+function applyFixedCustomsTablePositions(
+  tablePositions: TablePosition[],
+  tableNames: string[],
+): TablePosition[] {
+  return resizeTablePositions(tablePositions, FIXED_TABLE_COUNT).map((position, tableIndex) => {
+    const fixedPosition = getFixedCustomsTablePosition(tablePositions, tableNames, tableIndex);
+    return fixedPosition ?? clampTablePosition(position);
   });
 }
 
@@ -858,10 +898,7 @@ export function SeatingPlannerTab({
         ];
       });
 
-      const normalizedPositions = resizeTablePositions(
-        tablePositions,
-        FIXED_TABLE_COUNT,
-      ).map(clampTablePosition);
+      const normalizedPositions = applyFixedCustomsTablePositions(tablePositions, normalizedNames);
       await onSave(assignments, {
         tableCount: FIXED_TABLE_COUNT,
         tablePositions: normalizedPositions,
@@ -878,6 +915,7 @@ export function SeatingPlannerTab({
       setLastSavedTableNames(normalizedNames);
       setTableCategories(normalizedCategories);
       setLastSavedTableCategories(normalizedCategories);
+      setTablePositions(normalizedPositions);
       setLastSavedSeatAssignments([...seatAssignments]);
       setSaveMessage('座位安排已儲存。');
     } catch (error) {
@@ -1228,7 +1266,7 @@ export function SeatingPlannerTab({
                   {Array.from({ length: FIXED_TABLE_COUNT }, (_, tableIndex) => {
                     const tableNumber = tableIndex + 1;
                     const tablePosition =
-                      getViewOnlyTablePosition(tablePositions, tableNames, tableIndex) ??
+                      getFixedCustomsTablePosition(tablePositions, tableNames, tableIndex) ??
                       getTablePosition(tablePositions, tableIndex);
                     const tableCategory = tableCategories[tableIndex] ?? 'other';
 
