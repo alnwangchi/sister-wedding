@@ -2,8 +2,12 @@ import Link from 'next/link';
 
 import { RsvpForm } from '@/components/rsvp-form';
 import { RsvpFormHeroAnimation } from '@/components/rsvp-form-hero-animation';
+import { SeatLookupTool } from '@/components/seat-lookup-tool';
+import { isJulyInTaipei } from '@/lib/wedding-season';
 
 export default function RsvpPage() {
+  const showSeatLookup = isJulyInTaipei();
+
   return (
     <main className='px-6 py-8 sm:px-8 lg:px-12'>
       <div className='mx-auto max-w-4xl'>
@@ -18,10 +22,12 @@ export default function RsvpPage() {
             </div>
             <div className='relative z-10'>
               <h1 className='text-3xl font-semibold text-stone-800'>
-                威𣽆 & 姿婷婚禮表單
+                {showSeatLookup ? '婚禮查詢' : '威𣽆 & 姿婷婚禮表單'}
               </h1>
               <p className='mt-2 text-sm text-stone-500'>
-                請協助填寫以下資訊，讓我們可以更順利安排喜宴人數與座位。
+                {showSeatLookup
+                  ? '可依姓名／電話查座位，或以桌號查看整桌賓客與位置圖。'
+                  : '請協助填寫以下資訊，讓我們可以更順利安排喜宴人數與座位。'}
               </p>
             </div>
           </div>
@@ -32,17 +38,17 @@ export default function RsvpPage() {
             </div>
             <div>
               <h1 className='text-3xl font-semibold text-stone-800 sm:text-4xl'>
-                威𣽆 & 姿婷婚禮表單
+                {showSeatLookup ? '婚禮查詢' : '威𣽆 & 姿婷婚禮表單'}
               </h1>
               <p className='mt-2 text-sm text-stone-500 sm:text-base'>
-                請協助填寫以下資訊，讓我們可以更順利安排喜宴人數與座位。
+                {showSeatLookup
+                  ? '可依姓名／電話查座位，或以桌號查看整桌賓客與位置圖。'
+                  : '請協助填寫以下資訊，讓我們可以更順利安排喜宴人數與座位。'}
               </p>
             </div>
           </div>
 
-          <div className='mt-4'>
-            <RsvpForm />
-          </div>
+          <div className='mt-4'>{showSeatLookup ? <SeatLookupTool /> : <RsvpForm />}</div>
         </section>
       </div>
     </main>

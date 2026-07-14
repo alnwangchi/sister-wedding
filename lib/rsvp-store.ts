@@ -253,6 +253,153 @@ export async function deleteRsvp(id: string) {
   await deleteDoc(doc(db, COLLECTION_NAME, id));
 }
 
+export type SeatLookupResult = {
+  name: string;
+  seats: string[];
+};
+
+function guestSeatLabels(record: RsvpRecord): string[] {
+  if (record.seatSlots && record.seatSlots.length > 0) {
+    return record.seatSlots
+      .map((slot) => slot.seatPosition.trim())
+      .filter((label) => label.length > 0);
+  }
+  if (record.seatAssigned && typeof record.seatPosition === "string") {
+    const label = record.seatPosition.trim();
+    return label.length > 0 ? [label] : [];
+  }
+  return [];
+}
+
+function normalizeNameForLookup(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function normalizePhoneDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+/** 依姓名（部分符合）或電話（數字部分符合）查詢出席賓客座位 */
+export async function lookupGuestSeats(query: string): Promise<SeatLookupResult[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 1) {
+    return [];
+  }
+
+  const nameQuery = normalizeNameForLookup(trimmed);
+  const phoneQuery = normalizePhoneDigits(trimmed);
+  const records = await listRsvps();
+
+  return records
+    .filter((record) => record.attending)
+    .filter((record) => {
+      const nameMatch =
+        nameQuery.length >= 1 &&
+        normalizeNameForLookup(record.name).includes(nameQuery);
+      const phoneMatch =
+        phoneQuery.length >= 4 &&
+        normalizePhoneDigits(record.phone).includes(phoneQuery);
+      return nameMatch || phoneMatch;
+    })
+    .map((record) => ({
+      name: record.name,
+      seats: guestSeatLabels(record),
+    }))
+    .slice(0, 20);
+}
+
+const PUBLIC_TABLE_CAPACITY = 10;
+const DEFAULT_PUBLIC_TABLE_COUNT = 28;
+
+export type TableLookupSeat = {
+  seatNumber: number;
+  guestName: string | null;
+};
+
+export type TableLookupResult = {
+  tableNumber: number;
+  tableName: string;
+  seats: TableLookupSeat[];
+};
+
+function partySeatCountForLookup(record: RsvpRecord): number {
+  if (!record.attending) return 0;
+  const n = Math.floor(Number(record.guestCount));
+  if (Number.isFinite(n) && n >= 1) return n;
+  return 1;
+}
+
+function guestSlotsForLookup(record: RsvpRecord) {
+  if (record.seatSlots && record.seatSlots.length > 0) {
+    return [...record.seatSlots].sort((a, b) => a.seatOrder - b.seatOrder);
+  }
+  if (record.seatAssigned && typeof record.seatOrder === "number") {
+    return [
+      {
+        seatOrder: record.seatOrder,
+        seatPosition: record.seatPosition ?? "",
+      },
+    ];
+  }
+  return [];
+}
+
+/** 依桌號（1-based）查詢整桌座位與賓客 */
+export async function lookupTableByNumber(
+  tableNumber: number,
+): Promise<TableLookupResult | null> {
+  if (!Number.isInteger(tableNumber) || tableNumber < 1) {
+    return null;
+  }
+
+  const records = await listRsvps();
+  const source = records.find(
+    (r) => typeof r.seatingTableCount === "number" && r.seatingTableCount > 0,
+  );
+  const tableCount = source?.seatingTableCount ?? DEFAULT_PUBLIC_TABLE_COUNT;
+  if (tableNumber > tableCount) {
+    return null;
+  }
+
+  const namesSource = records.find(
+    (r) => Array.isArray(r.seatingTableNames) && r.seatingTableNames.length > 0,
+  )?.seatingTableNames;
+  const tableName =
+    namesSource?.[tableNumber - 1]?.trim() || `第 ${tableNumber} 桌`;
+
+  const seats: TableLookupSeat[] = Array.from(
+    { length: PUBLIC_TABLE_CAPACITY },
+    (_, index) => ({
+      seatNumber: index + 1,
+      guestName: null,
+    }),
+  );
+
+  for (const record of records) {
+    if (!record.attending) continue;
+    const slots = guestSlotsForLookup(record);
+    const partyN = Math.max(partySeatCountForLookup(record), slots.length, 1);
+
+    slots.forEach((slot, slotIndex) => {
+      const seatIndex = slot.seatOrder - 1;
+      if (seatIndex < 0) return;
+      const tableIndex = Math.floor(seatIndex / PUBLIC_TABLE_CAPACITY);
+      const seatOffset = seatIndex % PUBLIC_TABLE_CAPACITY;
+      if (tableIndex + 1 !== tableNumber) return;
+      if (seats[seatOffset]?.guestName) return;
+
+      const guestName =
+        partyN > 1 ? `${record.name}（${slotIndex + 1}/${partyN}）` : record.name;
+      seats[seatOffset] = {
+        seatNumber: seatOffset + 1,
+        guestName,
+      };
+    });
+  }
+
+  return { tableNumber, tableName, seats };
+}
+
 export async function saveSeatingAssignments(
   assignments: Array<{ id: string; seatOrder: number; seatPosition: string }>,
   seatingLayout: {

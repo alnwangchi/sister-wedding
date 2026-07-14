@@ -3,6 +3,7 @@ import Link from 'next/link';
 import mainPhoto from '../assets/main.jpg';
 import parkingCard1 from '../assets/2026 週邊停車場小卡.jpg';
 import parkingCard2 from '../assets/2026 週邊停車場小卡2.jpg';
+import { isJulyInTaipei } from '@/lib/wedding-season';
 
 const details = [
   { label: '婚宴時間', value: '2026/07/19 18:00' },
@@ -15,6 +16,8 @@ const cardFrame =
 const cardShell = `${cardFrame} bg-white/80`;
 
 export default function HomePage() {
+  const showSeatLookup = isJulyInTaipei();
+
   return (
     <main className='px-4 py-6 sm:px-8 sm:py-8 lg:px-12'>
       <section className='mx-auto grid min-h-[calc(100vh-3.5rem)] w-full max-w-6xl items-start gap-5 sm:gap-7 lg:min-h-[calc(100vh-4.5rem)] lg:grid-cols-[1.2fr_0.8fr] lg:gap-8'>
@@ -48,7 +51,7 @@ export default function HomePage() {
               href='/rsvp'
               className='inline-flex w-full items-center justify-center rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-rose-600 w-full'
             >
-              立即填寫回覆
+              {showSeatLookup ? '婚禮查詢' : '立即填寫回覆'}
             </Link>
           </div>
         </div>
@@ -88,11 +91,12 @@ export default function HomePage() {
           >
             <p className='text-sm font-semibold text-rose-500'>給親友的話</p>
             <p className='mt-4 whitespace-pre-line text-sm leading-7 text-stone-600 sm:text-base sm:leading-8'>
-              為了讓一切安排更加周到，
-              {'\n'}
-              邀請你填寫婚禮出席表單，讓我們為你預留一席溫暖的位置。
-              {'\n\n'}
-              謝謝你，出現在我們重要的時刻
+              {showSeatLookup
+                ? '婚宴當日若需確認座位，可點上方按鈕輸入姓名或電話查詢桌次。\n\n謝謝你，出現在我們重要的時刻'
+                : `為了讓一切安排更加周到，
+邀請你填寫婚禮出席表單，讓我們為你預留一席溫暖的位置。
+
+謝謝你，出現在我們重要的時刻`}
             </p>
           </div>
 
