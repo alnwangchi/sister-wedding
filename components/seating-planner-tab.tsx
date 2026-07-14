@@ -9,7 +9,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
-import { FileDown, ImageDown, Pencil, ZoomIn, ZoomOut } from 'lucide-react';
+import { FileDown, FileSpreadsheet, ImageDown, Pencil, ZoomIn, ZoomOut } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -122,6 +122,50 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
       reject(new Error('無法建立圖片檔案'));
     }, 'image/png');
   });
+}
+
+function escapeCsvCell(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function buildGuestSeatingCsv(
+  records: RsvpRecord[],
+  seatAssignments: Array<string | null>,
+  tableNames: string[],
+): string {
+  const seatIndexByToken = new Map<string, number>();
+  seatAssignments.forEach((token, index) => {
+    if (token) seatIndexByToken.set(token, index);
+  });
+
+  const rows: string[][] = [['姓名', '電話', '桌次', '號位', '座位位置']];
+
+  const attending = records
+    .filter((r) => r.attending)
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+
+  for (const r of attending) {
+    const partyN = partySeatCount(r);
+    for (let slotIndex = 0; slotIndex < partyN; slotIndex++) {
+      const token = makeSeatSlotToken(r.id, slotIndex);
+      const seatIndex = seatIndexByToken.get(token);
+
+      if (typeof seatIndex === 'number') {
+        const tableIndex = Math.floor(seatIndex / TABLE_CAPACITY);
+        const seatNum = (seatIndex % TABLE_CAPACITY) + 1;
+        const tableLabel = tableNames[tableIndex] ?? `第 ${tableIndex + 1} 桌`;
+        const seatPosition = `${tableLabel} - ${seatNum} 號位`;
+        rows.push([r.name, r.phone, tableLabel, String(seatNum), seatPosition]);
+      } else {
+        rows.push([r.name, r.phone, '', '', '']);
+      }
+    }
+  }
+
+  return `${rows.map((row) => row.map(escapeCsvCell).join(',')).join('\r\n')}\r\n`;
 }
 
 // ─── Types ───────────────────────────────────────────────────
@@ -1033,6 +1077,25 @@ export function SeatingPlannerTab({
     }
   }
 
+  function handleExportGuestSeatingCsv() {
+    if (isExporting) return;
+    try {
+      const csv = buildGuestSeatingCsv(records, seatAssignments, tableNames);
+      const stamp = exportFilenameStamp();
+      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `guest-seating-${stamp}.csv`;
+      link.href = url;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast.success('已匯出賓客座位 CSV');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '匯出失敗';
+      toast.error(msg);
+    }
+  }
+
   function openRenameTableDialog(tableIndex: number) {
     setRenameDraft(tableNames[tableIndex] ?? `第 ${tableIndex + 1} 桌`);
     setRenameCategoryDraft(tableCategories[tableIndex] ?? 'other');
@@ -1178,6 +1241,17 @@ export function SeatingPlannerTab({
               >
                 <FileDown aria-hidden='true' className='size-3.5' />
                 匯出 PDF
+              </Button>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className='h-8 gap-1.5 rounded-full text-xs'
+                onClick={handleExportGuestSeatingCsv}
+                disabled={isExporting || !!activeDragLabel}
+              >
+                <FileSpreadsheet aria-hidden='true' className='size-3.5' />
+                匯出賓客 CSV
               </Button>
             </div>
             <div className='flex items-center gap-2'>
