@@ -31,6 +31,7 @@ import {
 } from 'react-zoom-pan-pinch';
 
 import type { RsvpRecord, SeatingTableCategory } from '@/types/rsvp';
+import { tableNameMatchesNumber } from '@/lib/seating-table-number';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -275,15 +276,6 @@ function getTablePosition(
   return clampTablePosition(tablePositions[tableIndex] ?? getDefaultTablePosition(tableIndex));
 }
 
-function tableNameMatchesNumber(name: string, tableNumber: number): boolean {
-  const normalized = name.replace(/\s+/g, '');
-  const chineseNumber = tableNumber === 15 ? '十五' : tableNumber === 16 ? '十六' : '';
-  const arabicNumberPattern = new RegExp(`(^|\\D)${tableNumber}(\\D|$)`);
-  return (
-    arabicNumberPattern.test(normalized) ||
-    (chineseNumber.length > 0 && normalized.includes(chineseNumber))
-  );
-}
 
 function findNamedCustomsTableIndex(tableNames: string[], tableNumber: number): number | null {
   const index = tableNames.findIndex((name) => {

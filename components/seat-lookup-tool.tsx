@@ -1,29 +1,22 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useCallback, useRef, useState, type FormEvent } from 'react';
 import { Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import {
+  lookupTableInSnapshot,
+  searchGuestsInSnapshot,
+  type PublicSeatLookupSnapshot,
+  type SeatLookupResult,
+  type TableLookupResult,
+} from '@/lib/seat-lookup-query';
 import { cn } from '@/lib/utils';
 
-type SeatLookupResult = {
-  name: string;
-  seats: string[];
-};
-
-type TableLookupSeat = {
-  seatNumber: number;
-  guestName: string | null;
-};
-
-type TableLookupResult = {
-  tableNumber: number;
-  tableName: string;
-  seats: TableLookupSeat[];
-};
-
 type LookupTab = 'guest' | 'table';
+
+type EnsureSnapshot = () => Promise<PublicSeatLookupSnapshot>;
 
 const fieldClassName =
   'w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-stone-700 outline-none transition focus:border-rose-400 focus:ring-4 focus:ring-rose-100';
@@ -132,7 +125,7 @@ function TableSeatDiagram({ result }: { result: TableLookupResult }) {
   );
 }
 
-function GuestSeatSearch() {
+function GuestSeatSearch({ ensureSnapshot }: { ensureSnapshot: EnsureSnapshot }) {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -148,13 +141,10 @@ function GuestSeatSearch() {
 
     setIsSearching(true);
     setHasSearched(true);
+    setResults([]);
     try {
-      const res = await fetch(`/api/rsvp/seat-lookup?q=${encodeURIComponent(trimmed)}`);
-      const data = (await res.json()) as { results?: SeatLookupResult[]; message?: string };
-      if (!res.ok) {
-        throw new Error(data.message ?? '查詢失敗');
-      }
-      setResults(data.results ?? []);
+      const snapshot = await ensureSnapshot();
+      setResults(searchGuestsInSnapshot(snapshot, trimmed));
     } catch (error) {
       const message = error instanceof Error ? error.message : '查詢失敗';
       toast.error(message);
@@ -192,7 +182,9 @@ function GuestSeatSearch() {
         </div>
       </form>
 
-      {hasSearched ? (
+      {isSearching ? (
+        <p className='rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-500'>查詢中…</p>
+      ) : hasSearched ? (
         <div className='space-y-3'>
           {results.length === 0 ? (
             <p className='rounded-2xl bg-rose-50/80 px-4 py-3 text-sm text-stone-600'>
@@ -232,7 +224,7 @@ function GuestSeatSearch() {
   );
 }
 
-function TableSeatSearch() {
+function TableSeatSearch({ ensureSnapshot }: { ensureSnapshot: EnsureSnapshot }) {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -251,19 +243,12 @@ function TableSeatSearch() {
     setIsSearching(true);
     setHasSearched(true);
     setNotFound(false);
+    setResult(null);
     try {
-      const res = await fetch(`/api/rsvp/table-lookup?n=${encodeURIComponent(String(tableNumber))}`);
-      const data = (await res.json()) as { result?: TableLookupResult; message?: string };
-      if (res.status === 404) {
-        setResult(null);
-        setNotFound(true);
-        return;
-      }
-      if (!res.ok) {
-        throw new Error(data.message ?? '查詢失敗');
-      }
-      setResult(data.result ?? null);
-      setNotFound(!data.result);
+      const snapshot = await ensureSnapshot();
+      const next = lookupTableInSnapshot(snapshot, tableNumber);
+      setResult(next);
+      setNotFound(!next);
     } catch (error) {
       const message = error instanceof Error ? error.message : '查詢失敗';
       toast.error(message);
@@ -304,7 +289,9 @@ function TableSeatSearch() {
         </div>
       </form>
 
-      {hasSearched ? (
+      {isSearching ? (
+        <p className='rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-500'>查詢中…</p>
+      ) : hasSearched ? (
         notFound || !result ? (
           <p className='rounded-2xl bg-rose-50/80 px-4 py-3 text-sm text-stone-600'>
             找不到此桌號，請確認後再試。
@@ -323,6 +310,36 @@ function TableSeatSearch() {
 
 export function SeatLookupTool() {
   const [tab, setTab] = useState<LookupTab>('guest');
+  const snapshotRef = useRef<PublicSeatLookupSnapshot | null>(null);
+  const inflightRef = useRef<Promise<PublicSeatLookupSnapshot> | null>(null);
+
+  const ensureSnapshot = useCallback<EnsureSnapshot>(async () => {
+    if (snapshotRef.current) {
+      return snapshotRef.current;
+    }
+
+    if (!inflightRef.current) {
+      inflightRef.current = (async () => {
+        const res = await fetch('/api/rsvp/seat-lookup/snapshot');
+        const data = (await res.json()) as {
+          snapshot?: PublicSeatLookupSnapshot;
+          message?: string;
+        };
+        if (!res.ok) {
+          throw new Error(data.message ?? '載入座位資料失敗');
+        }
+        if (!data.snapshot) {
+          throw new Error('座位資料格式錯誤');
+        }
+        snapshotRef.current = data.snapshot;
+        return data.snapshot;
+      })().finally(() => {
+        inflightRef.current = null;
+      });
+    }
+
+    return inflightRef.current;
+  }, []);
 
   return (
     <div className='space-y-5'>
@@ -361,7 +378,13 @@ export function SeatLookupTool() {
         </button>
       </div>
 
-      <div role='tabpanel'>{tab === 'guest' ? <GuestSeatSearch /> : <TableSeatSearch />}</div>
+      <div role='tabpanel'>
+        {tab === 'guest' ? (
+          <GuestSeatSearch ensureSnapshot={ensureSnapshot} />
+        ) : (
+          <TableSeatSearch ensureSnapshot={ensureSnapshot} />
+        )}
+      </div>
     </div>
   );
 }

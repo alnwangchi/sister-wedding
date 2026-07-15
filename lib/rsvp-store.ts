@@ -12,7 +12,18 @@ import {
 } from "firebase/firestore";
 
 import { getFirebaseDb } from "@/lib/firebase";
+import {
+  emptyTableSeats,
+  lookupTableInSnapshot,
+  PUBLIC_TABLE_CAPACITY,
+  searchGuestsInSnapshot,
+  type PublicSeatLookupSnapshot,
+  type SeatLookupResult,
+  type TableLookupResult,
+} from "@/lib/seat-lookup-query";
 import type { CreateRsvpInput, RsvpRecord, SeatingTableCategory } from "@/types/rsvp";
+
+export type { PublicSeatLookupSnapshot, SeatLookupResult, TableLookupResult };
 
 const COLLECTION_NAME = "rsvps";
 const SEATING_META_REF = ["meta", "seating"] as const;
@@ -253,10 +264,7 @@ export async function deleteRsvp(id: string) {
   await deleteDoc(doc(db, COLLECTION_NAME, id));
 }
 
-export type SeatLookupResult = {
-  name: string;
-  seats: string[];
-};
+const DEFAULT_PUBLIC_TABLE_COUNT = 28;
 
 function guestSeatLabels(record: RsvpRecord): string[] {
   if (record.seatSlots && record.seatSlots.length > 0) {
@@ -270,57 +278,6 @@ function guestSeatLabels(record: RsvpRecord): string[] {
   }
   return [];
 }
-
-function normalizeNameForLookup(value: string): string {
-  return value.replace(/\s+/g, "").toLowerCase();
-}
-
-function normalizePhoneDigits(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
-/** 依姓名（部分符合）或電話（數字部分符合）查詢出席賓客座位 */
-export async function lookupGuestSeats(query: string): Promise<SeatLookupResult[]> {
-  const trimmed = query.trim();
-  if (trimmed.length < 1) {
-    return [];
-  }
-
-  const nameQuery = normalizeNameForLookup(trimmed);
-  const phoneQuery = normalizePhoneDigits(trimmed);
-  const records = await listRsvps();
-
-  return records
-    .filter((record) => record.attending)
-    .filter((record) => {
-      const nameMatch =
-        nameQuery.length >= 1 &&
-        normalizeNameForLookup(record.name).includes(nameQuery);
-      const phoneMatch =
-        phoneQuery.length >= 4 &&
-        normalizePhoneDigits(record.phone).includes(phoneQuery);
-      return nameMatch || phoneMatch;
-    })
-    .map((record) => ({
-      name: record.name,
-      seats: guestSeatLabels(record),
-    }))
-    .slice(0, 20);
-}
-
-const PUBLIC_TABLE_CAPACITY = 10;
-const DEFAULT_PUBLIC_TABLE_COUNT = 28;
-
-export type TableLookupSeat = {
-  seatNumber: number;
-  guestName: string | null;
-};
-
-export type TableLookupResult = {
-  tableNumber: number;
-  tableName: string;
-  seats: TableLookupSeat[];
-};
 
 function partySeatCountForLookup(record: RsvpRecord): number {
   if (!record.attending) return 0;
@@ -344,60 +301,81 @@ function guestSlotsForLookup(record: RsvpRecord) {
   return [];
 }
 
-/** 依桌號（1-based）查詢整桌座位與賓客 */
-export async function lookupTableByNumber(
-  tableNumber: number,
-): Promise<TableLookupResult | null> {
-  if (!Number.isInteger(tableNumber) || tableNumber < 1) {
-    return null;
-  }
-
-  const records = await listRsvps();
+/** 一次組出公開查詢用整包座位資料，供前端快取後本地搜尋 */
+export async function getPublicSeatLookupSnapshot(): Promise<PublicSeatLookupSnapshot> {
+  const [records, layoutMeta] = await Promise.all([
+    listRsvps(),
+    fetchSeatingLayoutMeta(),
+  ]);
   const source = records.find(
     (r) => typeof r.seatingTableCount === "number" && r.seatingTableCount > 0,
   );
-  const tableCount = source?.seatingTableCount ?? DEFAULT_PUBLIC_TABLE_COUNT;
-  if (tableNumber > tableCount) {
-    return null;
-  }
+  const tableCount =
+    layoutMeta?.tableCount ?? source?.seatingTableCount ?? DEFAULT_PUBLIC_TABLE_COUNT;
 
-  const namesSource = records.find(
-    (r) => Array.isArray(r.seatingTableNames) && r.seatingTableNames.length > 0,
-  )?.seatingTableNames;
-  const tableName =
-    namesSource?.[tableNumber - 1]?.trim() || `第 ${tableNumber} 桌`;
+  const namesSource =
+    layoutMeta?.tableNames ??
+    records.find(
+      (r) => Array.isArray(r.seatingTableNames) && r.seatingTableNames.length > 0,
+    )?.seatingTableNames ??
+    [];
 
-  const seats: TableLookupSeat[] = Array.from(
-    { length: PUBLIC_TABLE_CAPACITY },
-    (_, index) => ({
-      seatNumber: index + 1,
-      guestName: null,
-    }),
-  );
+  const tableNames = Array.from({ length: tableCount }, (_, index) => {
+    const custom = namesSource[index]?.trim();
+    return custom && custom.length > 0 ? custom : `第 ${index + 1} 桌`;
+  });
+
+  const tables = tableNames.map((tableName) => ({
+    tableName,
+    seats: emptyTableSeats(PUBLIC_TABLE_CAPACITY),
+  }));
+
+  const guests: PublicSeatLookupSnapshot["guests"] = [];
 
   for (const record of records) {
     if (!record.attending) continue;
+
+    guests.push({
+      name: record.name,
+      phoneDigits: record.phone.replace(/\D/g, ""),
+      seats: guestSeatLabels(record),
+    });
+
     const slots = guestSlotsForLookup(record);
     const partyN = Math.max(partySeatCountForLookup(record), slots.length, 1);
 
     slots.forEach((slot, slotIndex) => {
       const seatIndex = slot.seatOrder - 1;
       if (seatIndex < 0) return;
-      const tableIndex = Math.floor(seatIndex / PUBLIC_TABLE_CAPACITY);
+      const seatTableIndex = Math.floor(seatIndex / PUBLIC_TABLE_CAPACITY);
       const seatOffset = seatIndex % PUBLIC_TABLE_CAPACITY;
-      if (tableIndex + 1 !== tableNumber) return;
-      if (seats[seatOffset]?.guestName) return;
+      const table = tables[seatTableIndex];
+      if (!table || table.seats[seatOffset]?.guestName) return;
 
       const guestName =
         partyN > 1 ? `${record.name}（${slotIndex + 1}/${partyN}）` : record.name;
-      seats[seatOffset] = {
+      table.seats[seatOffset] = {
         seatNumber: seatOffset + 1,
         guestName,
       };
     });
   }
 
-  return { tableNumber, tableName, seats };
+  return { tableCount, tableNames, tables, guests };
+}
+
+/** 依姓名（部分符合）或電話（數字部分符合）查詢出席賓客座位 */
+export async function lookupGuestSeats(query: string): Promise<SeatLookupResult[]> {
+  const snapshot = await getPublicSeatLookupSnapshot();
+  return searchGuestsInSnapshot(snapshot, query);
+}
+
+/** 依場地桌號（自訂桌名中的數字）查詢整桌座位與賓客 */
+export async function lookupTableByNumber(
+  tableNumber: number,
+): Promise<TableLookupResult | null> {
+  const snapshot = await getPublicSeatLookupSnapshot();
+  return lookupTableInSnapshot(snapshot, tableNumber);
 }
 
 export async function saveSeatingAssignments(
